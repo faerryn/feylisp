@@ -24,7 +24,10 @@ pub fn main() anyerror!void {
                 '\n' => {
                     newline = true;
                     if (parens > 0) {
-                        try stdout.print("            ", .{});
+                        var i: usize = 0;
+                        while (i < parens + 3) : (i += 1) {
+                            try stdout.print("    ", .{});
+                        }
                     } else {
                         try stdout.print(" (fey lisp) ", .{});
                     }
