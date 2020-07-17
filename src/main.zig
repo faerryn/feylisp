@@ -1,8 +1,5 @@
 const std = @import("std");
-const lex = @import("lex.zig");
-const Lexer = lex.Lexer;
-const parse = @import("parse.zig");
-const Parser = parse.Parser;
+const Lexer = @import("lex.zig").Lexer;
 const stdout = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
 
