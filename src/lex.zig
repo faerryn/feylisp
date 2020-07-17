@@ -16,8 +16,8 @@ pub const Lexer = struct {
             integer_literal,
             float_literal,
             line_comment,
-            open_parenthesis,
-            close_parenthesis,
+            open_paren,
+            close_paren,
             quote,
         };
     };
@@ -63,13 +63,13 @@ pub const Lexer = struct {
                     },
                     '(' => {
                         eof = false;
-                        result.id = .open_parenthesis;
+                        result.id = .open_paren;
                         self.index += 1;
                         break;
                     },
                     ')' => {
                         eof = false;
-                        result.id = .close_parenthesis;
+                        result.id = .close_paren;
                         self.index += 1;
                         break;
                     },
