@@ -1,26 +1,26 @@
 const std = @import("std");
 
-pub const Token = struct {
-    id: Id,
-    start: usize,
-    end: usize,
-
-    pub const Id = enum {
-        invalid,
-        identifier,
-        string_literal,
-        integer_literal,
-        float_literal,
-        line_comment,
-        open_parenthesis,
-        close_parenthesis,
-        quote,
-    };
-};
-
 pub const Lexer = struct {
     buffer: []const u8,
     index: usize,
+
+    pub const Token = struct {
+        id: Id,
+        start: usize,
+        end: usize,
+
+        pub const Id = enum {
+            invalid,
+            identifier,
+            string_literal,
+            integer_literal,
+            float_literal,
+            line_comment,
+            open_parenthesis,
+            close_parenthesis,
+            quote,
+        };
+    };
 
     pub fn init(buffer: []const u8) Lexer {
         return Lexer{
