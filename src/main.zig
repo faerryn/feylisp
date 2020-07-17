@@ -1,8 +1,9 @@
 const std = @import("std");
-const Lexer = @import("lex.zig").Lexer;
 const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
+const parse = @import("parse.zig");
+const Tokenizer = parse.Tokenizer;
 
 pub fn main() anyerror!void {
     var source = std.ArrayList(u8).init(std.heap.page_allocator);
@@ -49,8 +50,8 @@ pub fn main() anyerror!void {
 
         const line = source.items[source_index..];
         source_index = source.items.len;
-        var lexer = Lexer.init(line);
-        while (lexer.next()) |token| {
+        var tokenizer = Tokenizer.init(line);
+        while (tokenizer.next()) |token| {
             try stdout.print(" {}: {}\n", .{ token.id, line[token.start..token.end] });
         }
     }

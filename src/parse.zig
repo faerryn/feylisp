@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Lexer = struct {
+pub const Tokenizer = struct {
     buffer: []const u8,
     index: usize,
 
@@ -22,8 +22,8 @@ pub const Lexer = struct {
         };
     };
 
-    pub fn init(buffer: []const u8) Lexer {
-        return Lexer{
+    pub fn init(buffer: []const u8) Tokenizer {
+        return Tokenizer{
             .buffer = buffer,
             .index = 0,
         };
@@ -41,7 +41,7 @@ pub const Lexer = struct {
         period,
     };
 
-    pub fn next(self: *Lexer) ?Token {
+    pub fn next(self: *Tokenizer) ?Token {
         const start_index = self.index;
         var state = State.start;
         var eof = true;
