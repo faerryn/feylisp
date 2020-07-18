@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Tokenizer = struct {
-    buffer: []const u8,
+    source: []const u8,
     index: usize,
 
     pub const Token = struct {
@@ -10,7 +10,6 @@ pub const Tokenizer = struct {
         end: usize,
 
         pub const Id = enum {
-            invalid,
             identifier,
             string_literal,
             integer_literal,
@@ -22,93 +21,81 @@ pub const Tokenizer = struct {
         };
     };
 
-    pub fn init(buffer: []const u8) Tokenizer {
+    pub fn init(source: []const u8) Tokenizer {
         return Tokenizer{
-            .buffer = buffer,
+            .source = source,
             .index = 0,
         };
     }
 
     const State = enum {
         start,
+        identifier,
+        string_literal,
+        unclosed_string_literal,
+        unclosed_string_literal_backslash,
         integer_literal,
         float_fraction,
-        string_literal,
-        string_literal_backslash,
-        identifier,
-        line_comment,
         sign,
         period,
+        line_comment,
+        open_paren,
+        close_paren,
+        quote,
     };
 
-    pub fn next(self: *Tokenizer) ?Token {
+    pub fn next(self: *Tokenizer) !?Token {
         const start_index = self.index;
         var state = State.start;
-        var eof = true;
         var result = Token{
-            .id = .invalid,
+            .id = undefined,
             .start = start_index,
             .end = undefined,
         };
-        while (self.index < self.buffer.len) : (self.index += 1) {
-            const c = self.buffer[self.index];
+        while (self.index < self.source.len) : (self.index += 1) {
+            const c = self.source[self.index];
             switch (state) {
                 .start => switch (c) {
-                    ' ', '\t', '\r', '\n' => {
-                        result.start = self.index + 1;
-                    },
-                    '"' => {
-                        eof = false;
-                        state = .string_literal;
-                    },
+                    ' ', '\t', '\r', '\n' => result.start = self.index + 1,
+                    '"' => state = .unclosed_string_literal,
                     '(' => {
-                        eof = false;
+                        state = .open_paren;
                         result.id = .open_paren;
                         self.index += 1;
                         break;
                     },
                     ')' => {
-                        eof = false;
+                        state = .close_paren;
                         result.id = .close_paren;
                         self.index += 1;
                         break;
                     },
                     '\'' => {
-                        eof = false;
+                        state = .quote;
                         result.id = .quote;
                         self.index += 1;
                         break;
                     },
                     '0'...'9' => {
-                        eof = false;
                         state = .integer_literal;
                         result.id = .integer_literal;
                     },
-                    '+', '-' => {
-                        eof = false;
-                        state = .sign;
-                    },
-                    '.' => {
-                        eof = false;
-                        state = .period;
-                    },
+                    '+', '-' => state = .sign,
+                    '.' => state = .period,
                     ';' => {
-                        eof = false;
                         state = .line_comment;
                         result.id = .line_comment;
                     },
                     else => {
-                        eof = false;
                         state = .identifier;
                         result.id = .identifier;
                     },
                 },
-                .string_literal => {
+                .unclosed_string_literal => {
                     switch (c) {
-                        '\\' => {
-                            state = .string_literal_backslash;
-                        },
+                        '\\' => state = .unclosed_string_literal_backslash,
                         '"' => {
+                            state = .string_literal;
                             result.id = .string_literal;
                             self.index += 1;
                             break;
@@ -116,9 +103,7 @@ pub const Tokenizer = struct {
                         else => {},
                     }
                 },
-                .string_literal_backslash => {
-                    state = .string_literal;
-                },
+                .unclosed_string_literal_backslash => state = .unclosed_string_literal,
                 .integer_literal => {
                     switch (c) {
                         '0'...'9' => {},
@@ -191,13 +176,104 @@ pub const Tokenizer = struct {
                         else => {},
                     }
                 },
+                else => unreachable,
             }
         }
-        if (eof) {
-            return null;
-        } else {
-            result.end = self.index;
-            return result;
+        result.end = self.index;
+        switch (state) {
+            .start => return null,
+            .unclosed_string_literal,
+            .unclosed_string_literal_backslash,
+            => return error.TokenizerUnclosedStringLiteral,
+            else => return result,
+        }
+    }
+};
+
+pub const Parser = struct {
+    allocator: *std.mem.Allocator,
+    source: []const u8,
+    tokens: []Tokenizer.Token,
+    index: usize,
+
+    pub const Expr = union(ExprTag) {
+        list: std.ArrayList(Expr),
+        quoted_list: std.ArrayList(Expr),
+        identifier: []const u8,
+        integer: i64,
+        float: f64,
+        string: []const u8,
+
+        pub fn deinit(self: Expr) void {
+            switch (self) {
+                .list => |list| {
+                    defer list.deinit();
+                    for (list.items) |branch| branch.deinit();
+                },
+                else => {},
+            }
+        }
+    };
+
+    pub const ExprTag = enum {
+        list,
+        quoted_list,
+        identifier,
+        integer,
+        float,
+        string,
+    };
+
+    pub fn init(allocator: *std.mem.Allocator, source: []const u8, tokens: []Tokenizer.Token) Parser {
+        return Parser{
+            .allocator = allocator,
+            .source = source,
+            .tokens = tokens,
+            .index = 0,
+        };
+    }
+
+    pub fn next(self: *Parser) anyerror!?Expr {
+        if (self.index >= self.tokens.len) return null;
+        const t = self.tokens[self.index];
+        self.index += 1;
+        switch (t.id) {
+            .identifier => return Expr{ .identifier = self.source[t.start..t.end] },
+            .string_literal => return Expr{ .string = self.source[t.start..t.end] },
+            .integer_literal => {
+                const i = try std.fmt.parseInt(i64, self.source[t.start..t.end], 10);
+                return Expr{ .integer = i };
+            },
+            .float_literal => {
+                const f = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
+                return Expr{ .float = f };
+            },
+            .line_comment => return try self.next(),
+            .open_paren => {
+                var list = std.ArrayList(Expr).init(self.allocator);
+                errdefer {
+                    defer list.deinit();
+                    for (list.items) |sublist| sublist.deinit();
+                }
+                while (self.tokens[self.index].id != .close_paren) {
+                    if (try self.next()) |expr| {
+                        try list.append(expr);
+                    } else {
+                        return error.ParserUnclosedParen;
+                    }
+                }
+                self.index += 1;
+                return Expr{ .list = list };
+            },
+            .close_paren => return error.ParseOverclosedParen,
+            .quote => {
+                if (self.tokens[self.index].id != .open_paren) return error.ParserInvalidQuote;
+                if (try self.next()) |list| {
+                    return Expr{ .quoted_list = list.list };
+                } else {
+                    return error.ParserInvalidQuote;
+                }
+            },
         }
     }
 };

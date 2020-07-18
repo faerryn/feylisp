@@ -4,11 +4,25 @@ const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
 const parse = @import("parse.zig");
 const Tokenizer = parse.Tokenizer;
+const Parser = parse.Parser;
 
 pub fn main() anyerror!void {
-    var source = std.ArrayList(u8).init(std.heap.page_allocator);
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+
+    var source = std.ArrayList(u8).init(&arena.allocator);
     defer source.deinit();
     var source_index: usize = 0;
+
+    var tokens = std.ArrayList(Tokenizer.Token).init(&arena.allocator);
+    defer tokens.deinit();
+    var tokens_index: usize = 0;
+
+    var exprs = std.ArrayList(Parser.Expr).init(&arena.allocator);
+    defer {
+        defer exprs.deinit();
+        for (exprs.items) |expr| expr.deinit();
+    }
+    var exprs_index: usize = 0;
 
     repl_loop: while (true) {
         try stdout.print(" (fey lisp) ", .{});
@@ -48,11 +62,24 @@ pub fn main() anyerror!void {
             }
         }
 
-        const line = source.items[source_index..];
-        source_index = source.items.len;
-        var tokenizer = Tokenizer.init(line);
-        while (tokenizer.next()) |token| {
-            try stdout.print(" {}: {}\n", .{ token.id, line[token.start..token.end] });
+        const line_source = source.items[source_index..];
+
+        var tokenizer = Tokenizer.init(line_source);
+        while (try tokenizer.next()) |token| {
+            try tokens.append(token);
+            std.debug.warn(" -- {}\n", .{token});
         }
+
+        const line_tokens = tokens.items[tokens_index..];
+
+        var parser = Parser.init(&arena.allocator, line_source, line_tokens);
+        while (try parser.next()) |expr| {
+            try exprs.append(expr);
+            std.debug.warn(" -- {}\n", .{expr});
+        }
+
+        source_index = source.items.len;
+        tokens_index = tokens.items.len;
+        exprs_index = exprs.items.len;
     }
 }
