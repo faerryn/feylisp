@@ -23,6 +23,9 @@ pub fn main() anyerror!void {
     }
     var exprs_index: usize = 0;
 
+    var lisp_engine = lisp.Lisp.init(&arena.allocator, null);
+    defer lisp_engine.deinit();
+
     repl_loop: while (true) {
         try stdout.print(" (fey lisp) ", .{});
 
@@ -69,8 +72,11 @@ pub fn main() anyerror!void {
         const line_tokens = tokens.items[tokens_index..];
 
         var parser = parse.Parser.init(&arena.allocator, line_source, line_tokens);
-        while (try parser.next()) |expr| {
+        while (try parser.next()) |real_expr| {
+            var expr = real_expr;
             try exprs.append(expr);
+            const result = lisp_engine.eval(&expr);
+            try stdout.print(" {}\n", .{result});
         }
 
         source_index = source.items.len;

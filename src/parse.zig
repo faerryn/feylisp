@@ -213,11 +213,13 @@ pub const Parser = struct {
         switch (t.id) {
             .identifier => {
                 var list = std.ArrayList(u8).init(self.allocator);
+                errdefer list.deinit();
                 try list.appendSlice(self.source[t.start..t.end]);
                 return lisp.Expr{ .identifier = list };
             },
             .string_literal => {
                 var list = std.ArrayList(u8).init(self.allocator);
+                errdefer list.deinit();
                 try list.appendSlice(self.source[t.start..t.end]);
                 return lisp.Expr{ .string = list };
             },
@@ -246,7 +248,7 @@ pub const Parser = struct {
                 self.index += 1;
                 return lisp.Expr{ .list = list };
             },
-            .close_paren => return error.ParseOverclosedParen,
+            .close_paren => return error.ParserOverclosedParen,
             .quote => {
                 if (self.tokens[self.index].id != .open_paren) return error.ParserInvalidQuote;
                 if (try self.next()) |list| {
