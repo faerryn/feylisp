@@ -1,25 +1,26 @@
 const std = @import("std");
+const lisp = @import("lisp.zig");
+
+pub const Token = struct {
+    id: Id,
+    start: usize,
+    end: usize,
+
+    pub const Id = enum {
+        identifier,
+        string_literal,
+        integer_literal,
+        float_literal,
+        line_comment,
+        open_paren,
+        close_paren,
+        quote,
+    };
+};
 
 pub const Tokenizer = struct {
     source: []const u8,
     index: usize,
-
-    pub const Token = struct {
-        id: Id,
-        start: usize,
-        end: usize,
-
-        pub const Id = enum {
-            identifier,
-            string_literal,
-            integer_literal,
-            float_literal,
-            line_comment,
-            open_paren,
-            close_paren,
-            quote,
-        };
-    };
 
     pub fn init(source: []const u8) Tokenizer {
         return Tokenizer{
@@ -193,38 +194,10 @@ pub const Tokenizer = struct {
 pub const Parser = struct {
     allocator: *std.mem.Allocator,
     source: []const u8,
-    tokens: []Tokenizer.Token,
+    tokens: []Token,
     index: usize,
 
-    pub const Expr = union(ExprTag) {
-        list: std.ArrayList(Expr),
-        quoted_list: std.ArrayList(Expr),
-        identifier: []const u8,
-        integer: i64,
-        float: f64,
-        string: []const u8,
-
-        pub fn deinit(self: Expr) void {
-            switch (self) {
-                .list => |list| {
-                    defer list.deinit();
-                    for (list.items) |branch| branch.deinit();
-                },
-                else => {},
-            }
-        }
-    };
-
-    pub const ExprTag = enum {
-        list,
-        quoted_list,
-        identifier,
-        integer,
-        float,
-        string,
-    };
-
-    pub fn init(allocator: *std.mem.Allocator, source: []const u8, tokens: []Tokenizer.Token) Parser {
+    pub fn init(allocator: *std.mem.Allocator, source: []const u8, tokens: []Token) Parser {
         return Parser{
             .allocator = allocator,
             .source = source,
@@ -233,24 +206,32 @@ pub const Parser = struct {
         };
     }
 
-    pub fn next(self: *Parser) anyerror!?Expr {
+    pub fn next(self: *Parser) anyerror!?lisp.Expr {
         if (self.index >= self.tokens.len) return null;
         const t = self.tokens[self.index];
         self.index += 1;
         switch (t.id) {
-            .identifier => return Expr{ .identifier = self.source[t.start..t.end] },
-            .string_literal => return Expr{ .string = self.source[t.start..t.end] },
+            .identifier => {
+                var list = std.ArrayList(u8).init(self.allocator);
+                try list.appendSlice(self.source[t.start..t.end]);
+                return lisp.Expr{ .identifier = list };
+            },
+            .string_literal => {
+                var list = std.ArrayList(u8).init(self.allocator);
+                try list.appendSlice(self.source[t.start..t.end]);
+                return lisp.Expr{ .string = list };
+            },
             .integer_literal => {
                 const i = try std.fmt.parseInt(i64, self.source[t.start..t.end], 10);
-                return Expr{ .integer = i };
+                return lisp.Expr{ .integer = i };
             },
             .float_literal => {
                 const f = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
-                return Expr{ .float = f };
+                return lisp.Expr{ .float = f };
             },
             .line_comment => return try self.next(),
             .open_paren => {
-                var list = std.ArrayList(Expr).init(self.allocator);
+                var list = std.ArrayList(lisp.Expr).init(self.allocator);
                 errdefer {
                     defer list.deinit();
                     for (list.items) |sublist| sublist.deinit();
@@ -263,13 +244,13 @@ pub const Parser = struct {
                     }
                 }
                 self.index += 1;
-                return Expr{ .list = list };
+                return lisp.Expr{ .list = list };
             },
             .close_paren => return error.ParseOverclosedParen,
             .quote => {
                 if (self.tokens[self.index].id != .open_paren) return error.ParserInvalidQuote;
                 if (try self.next()) |list| {
-                    return Expr{ .quoted_list = list.list };
+                    return lisp.Expr{ .quoted_list = list.list };
                 } else {
                     return error.ParserInvalidQuote;
                 }

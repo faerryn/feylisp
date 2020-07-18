@@ -3,8 +3,7 @@ const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
 const parse = @import("parse.zig");
-const Tokenizer = parse.Tokenizer;
-const Parser = parse.Parser;
+const lisp = @import("lisp.zig");
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -13,11 +12,11 @@ pub fn main() anyerror!void {
     defer source.deinit();
     var source_index: usize = 0;
 
-    var tokens = std.ArrayList(Tokenizer.Token).init(&arena.allocator);
+    var tokens = std.ArrayList(parse.Token).init(&arena.allocator);
     defer tokens.deinit();
     var tokens_index: usize = 0;
 
-    var exprs = std.ArrayList(Parser.Expr).init(&arena.allocator);
+    var exprs = std.ArrayList(lisp.Expr).init(&arena.allocator);
     defer {
         defer exprs.deinit();
         for (exprs.items) |expr| expr.deinit();
@@ -64,18 +63,14 @@ pub fn main() anyerror!void {
 
         const line_source = source.items[source_index..];
 
-        var tokenizer = Tokenizer.init(line_source);
-        while (try tokenizer.next()) |token| {
-            try tokens.append(token);
-            std.debug.warn(" -- {}\n", .{token});
-        }
+        var tokenizer = parse.Tokenizer.init(line_source);
+        while (try tokenizer.next()) |token| try tokens.append(token);
 
         const line_tokens = tokens.items[tokens_index..];
 
-        var parser = Parser.init(&arena.allocator, line_source, line_tokens);
+        var parser = parse.Parser.init(&arena.allocator, line_source, line_tokens);
         while (try parser.next()) |expr| {
             try exprs.append(expr);
-            std.debug.warn(" -- {}\n", .{expr});
         }
 
         source_index = source.items.len;
