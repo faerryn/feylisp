@@ -25,6 +25,7 @@ pub fn main() anyerror!void {
 
     var lisp_engine = lisp.Lisp.init(&arena.allocator, null);
     defer lisp_engine.deinit();
+    try lisp_engine.letIdentifier("+", lisp.Expr{ .native_func = @ptrToInt(add) });
 
     repl_loop: while (true) {
         try stdout.print(" (fey lisp) ", .{});
@@ -83,4 +84,24 @@ pub fn main() anyerror!void {
         tokens_index = tokens.items.len;
         exprs_index = exprs.items.len;
     }
+}
+
+fn add(lisp_engine: *lisp.Lisp, exprs: []lisp.Expr) anyerror!lisp.Expr {
+    const lhs = switch (try lisp_engine.eval(&exprs[0])) {
+        .integer => |integer| integer,
+        .reference => |reference| switch (reference.*) {
+            .integer => |integer| integer,
+            else => return error.AddNotInteger,
+        },
+        else => return error.AddNotInteger,
+    };
+    const rhs = switch (try lisp_engine.eval(&exprs[1])) {
+        .integer => |integer| integer,
+        .reference => |reference| switch (reference.*) {
+            .integer => |integer| integer,
+            else => return error.AddNotInteger,
+        },
+        else => return error.AddNotInteger,
+    };
+    return lisp.Expr{ .integer = lhs + rhs };
 }
