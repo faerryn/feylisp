@@ -89,18 +89,10 @@ pub fn main() anyerror!void {
 fn add(lisp_engine: *lisp.Lisp, exprs: []lisp.Expr) anyerror!lisp.Expr {
     const lhs = switch (try lisp_engine.eval(&exprs[0])) {
         .integer => |integer| integer,
-        .reference => |reference| switch (reference.*) {
-            .integer => |integer| integer,
-            else => return error.AddNotInteger,
-        },
         else => return error.AddNotInteger,
     };
     const rhs = switch (try lisp_engine.eval(&exprs[1])) {
         .integer => |integer| integer,
-        .reference => |reference| switch (reference.*) {
-            .integer => |integer| integer,
-            else => return error.AddNotInteger,
-        },
         else => return error.AddNotInteger,
     };
     return lisp.Expr{ .integer = lhs + rhs };

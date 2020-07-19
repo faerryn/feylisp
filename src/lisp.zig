@@ -88,7 +88,7 @@ pub const Lisp = struct {
                 }
             },
             else => {
-                return Expr{ .reference = expr };
+                return expr.*;
             },
         }
     }
