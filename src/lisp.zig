@@ -67,21 +67,16 @@ pub const Lisp = struct {
                             const func = @intToPtr(NativeFunc, address);
                             return try func(self, const_list.items[1..]);
                         },
-                        .reference => |reference| {
-                            switch (reference.*) {
-                                .native_func => |address| {
-                                    const func = @intToPtr(NativeFunc, address);
-                                    return try func(self, const_list.items[1..]);
-                                },
-                                else => return error.LispNoSuchFunction,
-                            }
-                        },
                         else => return error.LispNoSuchFunction,
                     }
                 }
             },
             .identifier => |identifier| {
                 if (self.getIdentifier(identifier.items)) |value| {
+                    switch (value.*) {
+                        .list, .quoted_list, .identifier, .string => return Expr{ .reference = value },
+                        else => return value.*,
+                    }
                     return Expr{ .reference = value };
                 } else {
                     return error.LispNoSuchIdentifier;
