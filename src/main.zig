@@ -4,6 +4,7 @@ const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
 const parse = @import("parse.zig");
 const lisp = @import("lisp.zig");
+const library = @import("library.zig");
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -23,9 +24,8 @@ pub fn main() anyerror!void {
     }
     var exprs_index: usize = 0;
 
-    var lisp_engine = lisp.Lisp.init(&arena.allocator, null);
+    var lisp_engine = try library.core(&arena.allocator);
     defer lisp_engine.deinit();
-    try lisp_engine.letIdentifier("+", lisp.Expr{ .native_func = @ptrToInt(add) });
 
     repl_loop: while (true) {
         try stdout.print(" (fey lisp) ", .{});
@@ -76,24 +76,15 @@ pub fn main() anyerror!void {
         while (try parser.next()) |real_expr| {
             var expr = real_expr;
             try exprs.append(expr);
-            const result = lisp_engine.eval(&expr);
-            try stdout.print(" {}\n", .{result});
+            if (lisp_engine.eval(&expr)) |result| {
+                try stdout.print(" {}\n", .{result});
+            } else |err| {
+                try stderr.print(" {}\n", .{err});
+            }
         }
 
         source_index = source.items.len;
         tokens_index = tokens.items.len;
         exprs_index = exprs.items.len;
     }
-}
-
-fn add(lisp_engine: *lisp.Lisp, exprs: []lisp.Expr) anyerror!lisp.Expr {
-    const lhs = switch (try lisp_engine.eval(&exprs[0])) {
-        .integer => |integer| integer,
-        else => return error.AddNotInteger,
-    };
-    const rhs = switch (try lisp_engine.eval(&exprs[1])) {
-        .integer => |integer| integer,
-        else => return error.AddNotInteger,
-    };
-    return lisp.Expr{ .integer = lhs + rhs };
 }

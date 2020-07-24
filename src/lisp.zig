@@ -1,7 +1,7 @@
 const std = @import("std");
 const parse = @import("parse.zig");
 
-pub const NativeFunc = fn (*Lisp, []Expr) anyerror!Expr;
+pub const NativeFunc = fn (*Engine, []Expr) anyerror!Expr;
 
 pub const Expr = union(ExprTag) {
     list: std.ArrayList(Expr),
@@ -38,36 +38,36 @@ pub const ExprTag = enum {
     native_func,
 };
 
-pub const Lisp = struct {
+pub const Engine = struct {
     allocator: *std.mem.Allocator,
     scope: std.StringHashMap(Expr),
-    parent: ?*Lisp,
+    parent: ?*Engine,
 
-    pub fn init(allocator: *std.mem.Allocator, parent: ?*Lisp) Lisp {
-        return Lisp{
+    pub fn init(allocator: *std.mem.Allocator, parent: ?*Engine) Engine {
+        return Engine{
             .allocator = allocator,
             .scope = std.StringHashMap(Expr).init(allocator),
             .parent = parent,
         };
     }
 
-    pub fn deinit(self: *Lisp) void {
+    pub fn deinit(self: *Engine) void {
         defer self.scope.deinit();
         for (self.scope.items()) |entry| entry.value.deinit();
     }
 
-    pub fn eval(self: *Lisp, expr: *Expr) anyerror!Expr {
+    pub fn eval(self: *Engine, expr: *Expr) anyerror!Expr {
         switch (expr.*) {
             .list => |const_list| {
                 if (const_list.items.len == 0) {
-                    return error.LispEmptyList;
+                    return error.EngineEmptyList;
                 } else {
                     switch (try self.eval(&const_list.items[0])) {
                         .native_func => |address| {
                             const func = @intToPtr(NativeFunc, address);
                             return try func(self, const_list.items[1..]);
                         },
-                        else => return error.LispNoSuchFunction,
+                        else => return error.EngineNoSuchFunction,
                     }
                 }
             },
@@ -79,7 +79,7 @@ pub const Lisp = struct {
                     }
                     return Expr{ .reference = value };
                 } else {
-                    return error.LispNoSuchIdentifier;
+                    return error.EngineNoSuchIdentifier;
                 }
             },
             else => {
@@ -88,7 +88,7 @@ pub const Lisp = struct {
         }
     }
 
-    pub fn getIdentifier(self: Lisp, identifier: []const u8) ?*Expr {
+    pub fn getIdentifier(self: Engine, identifier: []const u8) ?*Expr {
         if (self.scope.getEntry(identifier)) |entry| {
             return &entry.value;
         } else if (self.parent) |real_parent| {
@@ -98,9 +98,9 @@ pub const Lisp = struct {
         }
     }
 
-    pub fn letIdentifier(self: *Lisp, identifier: []const u8, expr: Expr) !void {
+    pub fn letIdentifier(self: *Engine, identifier: []const u8, expr: Expr) !void {
         if (self.scope.contains(identifier)) {
-            return error.LispRedeclareInScope;
+            return error.EngineRedeclareInScope;
         } else {
             try self.scope.put(identifier, expr);
         }
