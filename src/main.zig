@@ -7,7 +7,7 @@ const parse = @import("parse.zig");
 const interpret = @import("interpret.zig");
 const library = @import("library.zig");
 
-pub fn main() anyerror!void {
+pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;

@@ -50,9 +50,9 @@ pub const Interpreter = struct {
     allocator: *std.mem.Allocator,
     scope: std.StringHashMap(*Expr),
     mem: std.ArrayList(Expr),
-    parent: ?*const Interpreter,
+    parent: ?*Interpreter,
 
-    pub fn init(allocator: *std.mem.Allocator, parent: ?*const Interpreter) Interpreter {
+    pub fn init(allocator: *std.mem.Allocator, parent: ?*Interpreter) Interpreter {
         return Interpreter{
             .allocator = allocator,
             .scope = std.StringHashMap(*Expr).init(allocator),
