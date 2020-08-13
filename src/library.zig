@@ -5,6 +5,7 @@ const interpret = @import("interpret.zig");
 
 pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     var core = interpret.Interpreter.init(allocator, null);
+    errdefer core.deinit();
     try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(add) }));
     try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(sub) }));
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
@@ -35,7 +36,12 @@ fn sub(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret
 
 fn print(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
     if (args.len == 0) return error.PrintNoArguments;
-    for (args[0 .. args.len - 1]) |arg| try stdout.print("{} ", .{arg});
-    try stdout.print("{}\n", .{args[args.len - 1]});
+    for (args) |arg| {
+        switch (arg.*) {
+            .string => |string| try stdout.print("{}", .{string.items}),
+            else => try stdout.print("{}", .{arg}),
+        }
+    }
+    try stdout.print("\n", .{});
     return args[args.len - 1];
 }

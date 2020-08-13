@@ -25,7 +25,17 @@ pub const Expr = union(ExprTag) {
     ) !void {
         switch (self) {
             .list => |list| try writer.print("{}", .{list.items}),
-            .identifier, .string => |string| try writer.print("{}", .{string.items}),
+            .identifier => |identifier| try writer.print("{}", .{identifier.items}),
+            .string => |string| {
+                try writer.print("\"", .{});
+                for (string.items) |c| {
+                    switch (c) {
+                        '"' => try writer.print("\\\"", .{}),
+                        else => try writer.print("{}", .{c}),
+                    }
+                }
+                try writer.print("\"", .{});
+            },
             .number => |number| {
                 if (@trunc(number) == number) {
                     try writer.print("{}", .{@floatToInt(i64, number)});

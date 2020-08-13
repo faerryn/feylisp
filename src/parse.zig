@@ -84,14 +84,13 @@ pub const Tokenizer = struct {
                         result.id = .identifier;
                     },
                 },
+                .string_literal => break,
                 .unclosed_string_literal => {
                     switch (c) {
                         '\\' => state = .unclosed_string_literal_backslash,
                         '"' => {
                             state = .string_literal;
                             result.id = .string_literal;
-                            self.index += 1;
-                            break;
                         },
                         else => {},
                     }
@@ -204,15 +203,25 @@ pub const Parser = struct {
         self.index += 1;
         const expr = switch (t.id) {
             .line_comment => return try self.next(),
-            .identifier, .string_literal => blk: {
+            .identifier => blk: {
                 var list = std.ArrayList(u8).init(self.interpreter.allocator);
                 errdefer list.deinit();
                 try list.appendSlice(self.source[t.start..t.end]);
-                break :blk switch (t.id) {
-                    .identifier => interpret.Expr{ .identifier = list },
-                    .string_literal => interpret.Expr{ .string = list },
-                    else => unreachable,
-                };
+                break :blk interpret.Expr{ .identifier = list };
+            },
+            .string_literal => blk: {
+                var list = std.ArrayList(u8).init(self.interpreter.allocator);
+                errdefer list.deinit();
+                var backslash = false;
+                for (self.source[t.start + 1 .. t.end - 1]) |string_c| {
+                    if (backslash or string_c != '\\') {
+                        try list.append(string_c);
+                        backslash = false;
+                    } else {
+                        backslash = true;
+                    }
+                }
+                break :blk interpret.Expr{ .string = list };
             },
             .integer_literal, .float_literal => blk: {
                 const num = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
