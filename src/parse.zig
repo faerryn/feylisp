@@ -236,7 +236,6 @@ pub const Parser = struct {
             },
             .close_paren => return error.ParserOverclosedParen,
         };
-        try self.interpreter.mem.append(expr);
-        return &self.interpreter.mem.items[self.interpreter.mem.items.len - 1];
+        return try self.interpreter.store(expr);
     }
 };

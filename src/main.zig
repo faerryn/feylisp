@@ -13,8 +13,7 @@ pub fn main() anyerror!void {
 
     var core = interpret.Interpreter.init(allocator, null);
     defer core.deinit();
-    try core.mem.append(interpret.Expr{ .native_func = @ptrToInt(add) });
-    try core.scope.put("+", &core.mem.items[core.mem.items.len - 1]);
+    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(add) }));
 
     var interpreter = interpret.Interpreter.init(allocator, &core);
     defer interpreter.deinit();
@@ -78,6 +77,5 @@ fn add(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret
             else => return error.AddNotANumber,
         }
     }
-    try interpreter.mem.append(interpret.Expr{ .number = acc });
-    return &interpreter.mem.items[interpreter.mem.items.len - 1];
+    return try interpreter.store(interpret.Expr{ .number = acc });
 }

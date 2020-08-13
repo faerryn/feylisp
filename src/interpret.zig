@@ -16,6 +16,27 @@ pub const Expr = union(ExprTag) {
             else => {},
         }
     }
+
+    pub fn format(
+        self: Expr,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        switch (self) {
+            .list => |list| try writer.print("{}", .{list.items}),
+            .identifier => |list| try writer.print("{}", .{list.items}),
+            .string => |list| try writer.print("\"{}\"", .{list.items}),
+            .number => |number| {
+                if (@trunc(number) == number) {
+                    try writer.print("{}", .{@floatToInt(i64, number)});
+                } else {
+                    try writer.print("{}", .{number});
+                }
+            },
+            .native_func => |address| try writer.print("@{}", .{address}),
+        }
+    }
 };
 
 pub const ExprTag = enum {
@@ -84,5 +105,10 @@ pub const Interpreter = struct {
         } else {
             return null;
         }
+    }
+
+    pub fn store(self: *Interpreter, expr: Expr) !*Expr {
+        try self.mem.append(expr);
+        return &self.mem.items[self.mem.items.len - 1];
     }
 };
