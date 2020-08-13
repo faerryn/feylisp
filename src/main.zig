@@ -18,7 +18,8 @@ pub fn main() !void {
     defer interpreter.deinit();
 
     repl_loop: while (true) {
-        try stdout.print(" (fey lisp) ", .{});
+        const PROMPT = " >> ";
+        _ = try stdout.write(PROMPT);
 
         var source = std.ArrayList(u8).init(allocator);
         defer source.deinit();
@@ -46,7 +47,7 @@ pub fn main() !void {
                 },
                 '\n' => {
                     if (parens > 0) {
-                        try stdout.print(" " ** 12, .{});
+                        _ = try stdout.write(" " ** PROMPT.len);
                     } else {
                         break;
                     }
