@@ -1,5 +1,5 @@
 const std = @import("std");
-const lisp = @import("lisp.zig");
+const interpret = @import("interpret.zig");
 
 pub const Token = struct {
     id: Id,
@@ -14,7 +14,6 @@ pub const Token = struct {
         line_comment,
         open_paren,
         close_paren,
-        quote,
     };
 };
 
@@ -42,7 +41,6 @@ pub const Tokenizer = struct {
         line_comment,
         open_paren,
         close_paren,
-        quote,
     };
 
     pub fn next(self: *Tokenizer) !?Token {
@@ -68,12 +66,6 @@ pub const Tokenizer = struct {
                     ')' => {
                         state = .close_paren;
                         result.id = .close_paren;
-                        self.index += 1;
-                        break;
-                    },
-                    '\'' => {
-                        state = .quote;
-                        result.id = .quote;
                         self.index += 1;
                         break;
                     },
@@ -192,51 +184,49 @@ pub const Tokenizer = struct {
 };
 
 pub const Parser = struct {
-    allocator: *std.mem.Allocator,
+    interpreter: *interpret.Interpreter,
     source: []const u8,
     tokens: []Token,
     index: usize,
 
-    pub fn init(allocator: *std.mem.Allocator, source: []const u8, tokens: []Token) Parser {
+    pub fn init(interpreter: *interpret.Interpreter, source: []const u8, tokens: []Token) Parser {
         return Parser{
-            .allocator = allocator,
+            .interpreter = interpreter,
             .source = source,
             .tokens = tokens,
             .index = 0,
         };
     }
 
-    pub fn next(self: *Parser) anyerror!?lisp.Expr {
+    pub fn next(self: *Parser) anyerror!?*interpret.Expr {
         if (self.index >= self.tokens.len) return null;
         const t = self.tokens[self.index];
         self.index += 1;
-        switch (t.id) {
-            .identifier => {
-                var list = std.ArrayList(u8).init(self.allocator);
-                errdefer list.deinit();
-                try list.appendSlice(self.source[t.start..t.end]);
-                return lisp.Expr{ .identifier = list };
-            },
-            .string_literal => {
-                var list = std.ArrayList(u8).init(self.allocator);
-                errdefer list.deinit();
-                try list.appendSlice(self.source[t.start..t.end]);
-                return lisp.Expr{ .string = list };
-            },
-            .integer_literal => {
-                const i = try std.fmt.parseInt(i64, self.source[t.start..t.end], 10);
-                return lisp.Expr{ .integer = i };
-            },
-            .float_literal => {
-                const f = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
-                return lisp.Expr{ .float = f };
-            },
+        const expr = switch (t.id) {
             .line_comment => return try self.next(),
-            .open_paren => {
-                var list = std.ArrayList(lisp.Expr).init(self.allocator);
+            .identifier, .string_literal => blk: {
+                var list = std.ArrayList(u8).init(self.interpreter.allocator);
+                errdefer list.deinit();
+                try list.appendSlice(self.source[t.start..t.end]);
+                break :blk switch (t.id) {
+                    .identifier => interpret.Expr{ .identifier = list },
+                    .string_literal => interpret.Expr{ .string = list },
+                    else => unreachable,
+                };
+            },
+            .integer_literal => blk: {
+                const i = try std.fmt.parseInt(i64, self.source[t.start..t.end], 10);
+                break :blk interpret.Expr{ .integer = i };
+            },
+            .float_literal => blk: {
+                const f = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
+                break :blk interpret.Expr{ .float = f };
+            },
+            .open_paren => blk: {
+                var list = std.ArrayList(*interpret.Expr).init(self.interpreter.allocator);
                 errdefer {
                     defer list.deinit();
-                    for (list.items) |sublist| sublist.deinit();
+                    for (list.items) |branch| branch.deinit();
                 }
                 while (self.tokens[self.index].id != .close_paren) {
                     if (try self.next()) |expr| {
@@ -246,17 +236,11 @@ pub const Parser = struct {
                     }
                 }
                 self.index += 1;
-                return lisp.Expr{ .list = list };
+                break :blk interpret.Expr{ .list = list };
             },
             .close_paren => return error.ParserOverclosedParen,
-            .quote => {
-                if (self.tokens[self.index].id != .open_paren) return error.ParserInvalidQuote;
-                if (try self.next()) |list| {
-                    return lisp.Expr{ .quoted_list = list.list };
-                } else {
-                    return error.ParserInvalidQuote;
-                }
-            },
-        }
+        };
+        try self.interpreter.mem.append(expr);
+        return &self.interpreter.mem.items[self.interpreter.mem.items.len - 1];
     }
 };
