@@ -5,16 +5,15 @@ const stdin = std.io.getStdIn().reader();
 
 const parse = @import("parse.zig");
 const interpret = @import("interpret.zig");
+const library = @import("library.zig");
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;
 
-    var core = interpret.Interpreter.init(allocator, null);
+    var core = try library.initCore(allocator);
     defer core.deinit();
-    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(add) }));
-
     var interpreter = interpret.Interpreter.init(allocator, &core);
     defer interpreter.deinit();
 
@@ -67,15 +66,4 @@ pub fn main() anyerror!void {
             try stdout.print("{}\n", .{result});
         }
     }
-}
-
-fn add(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
-    var acc: f64 = 0.0;
-    for (args) |arg| {
-        switch (arg.*) {
-            .number => |num| acc += num,
-            else => return error.AddNotANumber,
-        }
-    }
-    return try interpreter.store(interpret.Expr{ .number = acc });
 }

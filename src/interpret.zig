@@ -25,8 +25,7 @@ pub const Expr = union(ExprTag) {
     ) !void {
         switch (self) {
             .list => |list| try writer.print("{}", .{list.items}),
-            .identifier => |list| try writer.print("{}", .{list.items}),
-            .string => |list| try writer.print("\"{}\"", .{list.items}),
+            .identifier, .string => |string| try writer.print("{}", .{string.items}),
             .number => |number| {
                 if (@trunc(number) == number) {
                     try writer.print("{}", .{@floatToInt(i64, number)});
@@ -51,9 +50,9 @@ pub const Interpreter = struct {
     allocator: *std.mem.Allocator,
     scope: std.StringHashMap(*Expr),
     mem: std.ArrayList(Expr),
-    parent: ?*Interpreter,
+    parent: ?*const Interpreter,
 
-    pub fn init(allocator: *std.mem.Allocator, parent: ?*Interpreter) Interpreter {
+    pub fn init(allocator: *std.mem.Allocator, parent: ?*const Interpreter) Interpreter {
         return Interpreter{
             .allocator = allocator,
             .scope = std.StringHashMap(*Expr).init(allocator),
