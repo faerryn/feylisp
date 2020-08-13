@@ -11,7 +11,12 @@ pub fn main() anyerror!void {
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;
 
-    var interpreter = interpret.Interpreter.init(allocator, null);
+    var core = interpret.Interpreter.init(allocator, null);
+    defer core.deinit();
+    try core.mem.append(interpret.Expr{ .native_func = @ptrToInt(add) });
+    try core.scope.put("+", &core.mem.items[core.mem.items.len - 1]);
+
+    var interpreter = interpret.Interpreter.init(allocator, &core);
     defer interpreter.deinit();
 
     repl_loop: while (true) {
@@ -43,7 +48,7 @@ pub fn main() anyerror!void {
                 },
                 '\n' => {
                     if (parens > 0) {
-                        try stdout.print("            ", .{});
+                        try stdout.print(" " ** 12, .{});
                     } else {
                         break;
                     }
@@ -63,4 +68,16 @@ pub fn main() anyerror!void {
             try stdout.print("{}\n", .{result});
         }
     }
+}
+
+fn add(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    var acc: f64 = 0.0;
+    for (args) |arg| {
+        switch (arg.*) {
+            .number => |num| acc += num,
+            else => return error.AddNotANumber,
+        }
+    }
+    try interpreter.mem.append(interpret.Expr{ .number = acc });
+    return &interpreter.mem.items[interpreter.mem.items.len - 1];
 }

@@ -214,13 +214,9 @@ pub const Parser = struct {
                     else => unreachable,
                 };
             },
-            .integer_literal => blk: {
-                const i = try std.fmt.parseInt(i64, self.source[t.start..t.end], 10);
-                break :blk interpret.Expr{ .integer = i };
-            },
-            .float_literal => blk: {
-                const f = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
-                break :blk interpret.Expr{ .float = f };
+            .integer_literal, .float_literal => blk: {
+                const num = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
+                break :blk interpret.Expr{ .number = num };
             },
             .open_paren => blk: {
                 var list = std.ArrayList(*interpret.Expr).init(self.interpreter.allocator);

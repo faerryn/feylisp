@@ -6,8 +6,7 @@ pub const Expr = union(ExprTag) {
     list: std.ArrayList(*Expr),
     identifier: std.ArrayList(u8),
     string: std.ArrayList(u8),
-    integer: i64,
-    float: f64,
+    number: f64,
     native_func: usize,
 
     pub fn deinit(self: Expr) void {
@@ -23,8 +22,7 @@ pub const ExprTag = enum {
     list,
     identifier,
     string,
-    integer,
-    float,
+    number,
     native_func,
 };
 
@@ -59,7 +57,7 @@ pub const Interpreter = struct {
                         .native_func => |address| {
                             const func = @intToPtr(NativeCall, address);
                             var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
-                            errdefer args_list.deinit();
+                            defer args_list.deinit();
                             for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
                             return try func(self, args_list.items);
                         },
