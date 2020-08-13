@@ -27,14 +27,14 @@ pub const Expr = union(ExprTag) {
             .list => |list| try writer.print("{}", .{list.items}),
             .identifier => |identifier| try writer.print("{}", .{identifier.items}),
             .string => |string| {
-                try writer.print("\"", .{});
+                _ = try writer.write("\"");
                 for (string.items) |c| {
                     switch (c) {
-                        '"' => try writer.print("\\\"", .{}),
-                        else => try writer.print("{}", .{c}),
+                        '"' => _ = try writer.write("\\\""),
+                        else => try writer.writeByte(c),
                     }
                 }
-                try writer.print("\"", .{});
+                _ = try writer.write("\"");
             },
             .number => |number| {
                 if (@trunc(number) == number) {
