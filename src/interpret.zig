@@ -7,13 +7,18 @@ pub const Expr = union(ExprTag) {
     identifier: std.ArrayList(u8),
     string: std.ArrayList(u8),
     number: f64,
+    macro: struct {
+        params: []*Expr,
+        body: []*Expr,
+    },
     native_func: usize,
+    native_macro: usize,
 
     pub fn deinit(self: Expr) void {
         switch (self) {
             .list => |list| list.deinit(),
             .identifier, .string => |list| list.deinit(),
-            else => {},
+            .number, .macro, .native_func, .native_macro => {},
         }
     }
 
@@ -43,7 +48,9 @@ pub const Expr = union(ExprTag) {
                     try writer.print("{}", .{number});
                 }
             },
-            .native_func => |address| try writer.print("@{}", .{address}),
+            .macro => |macro| try writer.print("(macro {} {})", .{ macro.params, macro.body }),
+            .native_func => |address| try writer.print("func@{}", .{address}),
+            .native_macro => |address| try writer.print("macro@{}", .{address}),
         }
     }
 };
@@ -53,7 +60,9 @@ pub const ExprTag = enum {
     identifier,
     string,
     number,
+    macro,
     native_func,
+    native_macro,
 };
 
 pub const Interpreter = struct {
@@ -80,44 +89,73 @@ pub const Interpreter = struct {
     pub fn eval(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
             .list => |list| {
-                if (list.items.len == 0) {
-                    return error.InterpreterEmptyList;
-                } else {
-                    switch ((try self.eval(list.items[0])).*) {
-                        .native_func => |address| {
-                            const func = @intToPtr(NativeCall, address);
-                            var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
-                            defer args_list.deinit();
-                            for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
-                            return try func(self, args_list.items);
-                        },
-                        else => return error.InterpreterNoSuchFunction,
-                    }
+                if (list.items.len == 0) return error.InterpreterEmptyList;
+                switch ((try self.eval(list.items[0])).*) {
+                    .native_macro => |address| {
+                        const macro = @intToPtr(NativeCall, address);
+                        return try macro(self, list.items[1..]);
+                    },
+                    .native_func => |address| {
+                        const func = @intToPtr(NativeCall, address);
+                        var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
+                        defer args_list.deinit();
+                        for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
+                        return try func(self, args_list.items);
+                    },
+                    .macro => |macro| {
+                        if (macro.params.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
+                        if (macro.body.len < 1) return error.InterpreterMacroNoBody;
+                        var sub_interpreter = Interpreter.init(self.allocator, self);
+                        defer sub_interpreter.deinit();
+                        for (macro.params) |param, i| switch (param.*) {
+                            .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, list.items[i + 1]),
+                            else => return error.InterpreterMacroInvalidParameter,
+                        };
+                        for (macro.body[0 .. macro.body.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
+                        return self.steal(try sub_interpreter.eval(macro.body[macro.body.len - 1]));
+                    },
+                    else => return error.InterpreterNoSuchFunction,
                 }
             },
             .identifier => |identifier| {
-                if (self.get(identifier.items)) |value| {
-                    return value;
-                } else {
-                    return error.InterpreterNoSuchIdentifier;
-                }
+                if (self.get(identifier.items)) |value| return value;
+                return error.InterpreterNoSuchIdentifier;
             },
-            else => return expr,
+            .number, .string, .macro, .native_func, .native_macro => return expr,
         }
     }
 
     pub fn get(self: Interpreter, identifier: []const u8) ?*Expr {
-        if (self.scope.getEntry(identifier)) |entry| {
-            return entry.value;
-        } else if (self.parent) |real_parent| {
-            return real_parent.get(identifier);
-        } else {
-            return null;
-        }
+        if (self.scope.getEntry(identifier)) |entry| return entry.value;
+        if (self.parent) |real_parent| return real_parent.get(identifier);
+        return null;
     }
 
     pub fn store(self: *Interpreter, expr: Expr) !*Expr {
         try self.mem.append(expr);
         return &self.mem.items[self.mem.items.len - 1];
+    }
+
+    pub fn steal(self: *Interpreter, expr: *Expr) anyerror!*Expr {
+        switch (expr.*) {
+            .string => |_| return try self.store(Expr{
+                .string = std.ArrayList(u8).fromOwnedSlice(
+                    expr.string.allocator,
+                    expr.string.toOwnedSlice(),
+                ),
+            }),
+            .number => |_| return try self.store(expr.*),
+            .native_func, .native_macro => |_| return try self.store(expr.*),
+            .list => |_| {
+                var stolen_list = std.ArrayList(*Expr).fromOwnedSlice(
+                    expr.list.allocator,
+                    expr.list.toOwnedSlice(),
+                );
+                for (stolen_list.items) |branch| _ = try self.steal(branch);
+                return try self.store(Expr{ .list = stolen_list });
+            },
+            .macro => |_| unreachable, // TODO figure out how you want to handle macros, eh?
+            .identifier => |_| unreachable, // You can't evaluate an expression into an identifier
+        }
     }
 };

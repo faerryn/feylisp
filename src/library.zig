@@ -9,6 +9,8 @@ pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(add) }));
     try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(sub) }));
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
+    try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
+    try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
     return core;
 }
 
@@ -44,4 +46,25 @@ fn print(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpr
     }
     try stdout.print("\n", .{});
     return args[args.len - 1];
+}
+
+fn let(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    if (args.len != 2) return error.LetInvalidArgumentsLength;
+    switch (args[0].*) {
+        .identifier => |identifier| {
+            const value = try interpreter.eval(args[1]);
+            try interpreter.scope.put(identifier.items, value);
+            return value;
+        },
+        else => return error.LetInvalidIdentifier,
+    }
+}
+
+fn macro(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    if (args.len < 2) return error.MacroInvalidArgumentsLength;
+    const params = switch (args[0].*) {
+        .list => |list| list.items,
+        else => return error.MacroInvalidParametersList,
+    };
+    return interpreter.store(interpret.Expr{ .macro = .{ .params = params, .body = args[1..] } });
 }
