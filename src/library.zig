@@ -44,7 +44,6 @@ fn print(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpr
             else => try stdout.print("{}", .{arg}),
         }
     }
-    try stdout.print("\n", .{});
     return args[args.len - 1];
 }
 

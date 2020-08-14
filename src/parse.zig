@@ -210,15 +210,23 @@ pub const Parser = struct {
                 break :blk interpret.Expr{ .identifier = list };
             },
             .string_literal => blk: {
-                var list = std.ArrayList(u8).init(self.interpreter.allocator);
+                var list = try std.ArrayList(u8).initCapacity(self.interpreter.allocator, (t.end - t.start - 2) / 2);
                 errdefer list.deinit();
                 var backslash = false;
                 for (self.source[t.start + 1 .. t.end - 1]) |string_c| {
-                    if (backslash or string_c != '\\') {
-                        try list.append(string_c);
+                    if (backslash) {
+                        switch (string_c) {
+                            'n' => try list.append('\n'),
+                            't' => try list.append('\t'),
+                            else => try list.append(string_c),
+                        }
                         backslash = false;
                     } else {
-                        backslash = true;
+                        if (string_c == '\\') {
+                            backslash = true;
+                        } else {
+                            try list.append(string_c);
+                        }
                     }
                 }
                 break :blk interpret.Expr{ .string = list };

@@ -36,6 +36,8 @@ pub const Expr = union(ExprTag) {
                 for (string.items) |c| {
                     switch (c) {
                         '"' => _ = try writer.write("\\\""),
+                        '\n' => _ = try writer.write("\\n"),
+                        '\t' => _ = try writer.write("\\t"),
                         else => try writer.writeByte(c),
                     }
                 }
