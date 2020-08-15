@@ -148,7 +148,7 @@ pub const Interpreter = struct {
                             else => return error.InterpreterFuncInvalidParameter,
                         };
                         for (func.body.items[0 .. func.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return self.clone(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]));
+                        return self.steal(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]));
                     },
                     .macro => |macro| {
                         if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
@@ -160,7 +160,7 @@ pub const Interpreter = struct {
                             else => return error.InterpreterMacroInvalidParameter,
                         };
                         for (macro.body.items[0 .. macro.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
+                        return self.steal(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
                     },
                     else => return error.InterpreterNoSuchFunction,
                 }
@@ -186,17 +186,15 @@ pub const Interpreter = struct {
 
     pub fn clone(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
-            .string => |string| {
+            .string, .identifier => |string| {
                 var string_copy = std.ArrayList(u8).init(self.allocator);
                 errdefer string_copy.deinit();
                 try string_copy.appendSlice(string.items);
-                return try self.store(.{ .string = string_copy });
-            },
-            .identifier => |identifier| {
-                var identifier_copy = std.ArrayList(u8).init(self.allocator);
-                errdefer identifier_copy.deinit();
-                try identifier_copy.appendSlice(identifier.items);
-                return try self.store(.{ .identifier = identifier_copy });
+                switch (expr.*) {
+                    .string => return try self.store(.{ .string = string_copy }),
+                    .identifier => return try self.store(.{ .identifier = string_copy }),
+                    else => unreachable,
+                }
             },
             .number => |_| return try self.store(expr.*),
             .native_func, .native_macro => |_| return try self.store(expr.*),
@@ -206,23 +204,52 @@ pub const Interpreter = struct {
                 for (list.items) |branch| try list_copy.append(try self.clone(branch));
                 return try self.store(.{ .list = list_copy });
             },
-            .func => |call| {
+            .func, .macro => |call| {
                 var params_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.params.items.len);
                 errdefer params_copy.deinit();
                 for (call.params.items) |branch| try params_copy.append(try self.clone(branch));
                 var body_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.body.items.len);
                 errdefer body_copy.deinit();
                 for (call.body.items) |branch| try body_copy.append(try self.clone(branch));
-                return try self.store(.{ .func = .{ .params = params_copy, .body = body_copy } });
+                switch (expr.*) {
+                    .func => return try self.store(.{ .func = .{ .params = params_copy, .body = body_copy } }),
+                    .macro => return try self.store(.{ .macro = .{ .params = params_copy, .body = body_copy } }),
+                    else => unreachable,
+                }
             },
-            .macro => |call| {
-                var params_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.params.items.len);
-                errdefer params_copy.deinit();
-                for (call.params.items) |branch| try params_copy.append(try self.clone(branch));
-                var body_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.body.items.len);
-                errdefer body_copy.deinit();
-                for (call.body.items) |branch| try body_copy.append(try self.clone(branch));
-                return try self.store(.{ .macro = .{ .params = params_copy, .body = body_copy } });
+        }
+    }
+
+    pub fn steal(self: *Interpreter, expr: *Expr) anyerror!*Expr {
+        switch (expr.*) {
+            .string, .identifier => |_| {
+                const string_stolen = std.ArrayList(u8).fromOwnedSlice(expr.string.allocator, expr.string.toOwnedSlice());
+                switch (expr.*) {
+                    .string => return try self.store(.{ .string = string_stolen }),
+                    .identifier => return try self.store(.{ .identifier = string_stolen }),
+                    else => unreachable,
+                }
+            },
+            .number => |_| return try self.store(expr.*),
+            .native_func, .native_macro => |_| return try self.store(expr.*),
+            .list => |_| {
+                var list_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.list.allocator, expr.list.toOwnedSlice());
+                errdefer list_stolen.deinit();
+                for (list_stolen.items) |branch| _ = try self.steal(branch);
+                return try self.store(.{ .list = list_stolen });
+            },
+            .func, .macro => |_| {
+                var params_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.func.params.allocator, expr.func.params.toOwnedSlice());
+                errdefer params_stolen.deinit();
+                for (params_stolen.items) |branch| _ = try self.steal(branch);
+                var body_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.func.body.allocator, expr.func.body.toOwnedSlice());
+                errdefer body_stolen.deinit();
+                for (body_stolen.items) |branch| _ = try self.steal(branch);
+                switch (expr.*) {
+                    .func => return try self.store(.{ .func = .{ .params = params_stolen, .body = body_stolen } }),
+                    .macro => return try self.store(.{ .func = .{ .params = params_stolen, .body = body_stolen } }),
+                    else => unreachable,
+                }
             },
         }
     }
