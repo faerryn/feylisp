@@ -11,6 +11,7 @@ pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
     try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
     try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
+    try core.scope.put("list", try core.store(interpret.Expr{ .native_func = @ptrToInt(list) }));
     return core;
 }
 
@@ -62,8 +63,15 @@ fn let(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret
 fn macro(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
     if (args.len < 2) return error.MacroInvalidArgumentsLength;
     const params = switch (args[0].*) {
-        .list => |list| list.items,
+        .list => |params| params.items,
         else => return error.MacroInvalidParametersList,
     };
     return interpreter.store(interpret.Expr{ .macro = .{ .params = params, .body = args[1..] } });
+}
+
+fn list(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    var exprs = try std.ArrayList(*interpret.Expr).initCapacity(interpreter.allocator, args.len);
+    errdefer exprs.deinit();
+    for (args) |arg| try exprs.append(arg);
+    return interpreter.store(interpret.Expr{ .list = exprs });
 }

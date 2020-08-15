@@ -24,12 +24,19 @@ pub const Expr = union(ExprTag) {
 
     pub fn format(
         self: Expr,
-        comptime fmt: []const u8,
+        fmt: []const u8,
         options: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
         switch (self) {
-            .list => |list| try writer.print("{}", .{list.items}),
+            .list => |list| {
+                _ = try writer.write("(");
+                if (list.items.len > 0) {
+                    for (list.items[0 .. list.items.len - 1]) |expr| try writer.print("{} ", .{expr.*});
+                    try writer.print("{}", .{list.items[list.items.len - 1]});
+                }
+                _ = try writer.write(")");
+            },
             .identifier => |identifier| try writer.print("{}", .{identifier.items}),
             .string => |string| {
                 _ = try writer.write("\"");
@@ -50,7 +57,18 @@ pub const Expr = union(ExprTag) {
                     try writer.print("{}", .{number});
                 }
             },
-            .macro => |macro| try writer.print("(macro {} {})", .{ macro.params, macro.body }),
+            .macro => |macro| {
+                _ = try writer.write("(macro (");
+                if (macro.params.len > 0) {
+                    for (macro.params[0 .. macro.params.len - 1]) |param| try writer.print("{} ", .{param});
+                    try writer.print("{}", .{macro.params[macro.params.len - 1]});
+                }
+                _ = try writer.write(")");
+                if (macro.body.len > 0) {
+                    for (macro.body) |expr| try writer.print("\n{}", .{expr});
+                }
+                _ = try writer.write(")");
+            },
             .native_func => |address| try writer.print("func@{}", .{address}),
             .native_macro => |address| try writer.print("macro@{}", .{address}),
         }
