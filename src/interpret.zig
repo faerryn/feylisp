@@ -1,24 +1,30 @@
 const std = @import("std");
 
 pub const NativeCall = fn (*Interpreter, []*Expr) anyerror!*Expr;
+pub const Call = struct {
+    params: std.ArrayList(*Expr),
+    body: std.ArrayList(*Expr),
+};
 
 pub const Expr = union(ExprTag) {
     list: std.ArrayList(*Expr),
     identifier: std.ArrayList(u8),
     string: std.ArrayList(u8),
     number: f64,
-    macro: struct {
-        params: []*Expr,
-        body: []*Expr,
-    },
+    func: Call,
+    macro: Call,
     native_func: usize,
     native_macro: usize,
 
     pub fn deinit(self: Expr) void {
         switch (self) {
             .list => |list| list.deinit(),
-            .identifier, .string => |list| list.deinit(),
-            .number, .macro, .native_func, .native_macro => {},
+            .identifier, .string => |string| string.deinit(),
+            .func, .macro => |call| {
+                call.params.deinit();
+                call.body.deinit();
+            },
+            .number, .native_func, .native_macro => {},
         }
     }
 
@@ -57,15 +63,27 @@ pub const Expr = union(ExprTag) {
                     try writer.print("{}", .{number});
                 }
             },
-            .macro => |macro| {
-                _ = try writer.write("(macro (");
-                if (macro.params.len > 0) {
-                    for (macro.params[0 .. macro.params.len - 1]) |param| try writer.print("{} ", .{param});
-                    try writer.print("{}", .{macro.params[macro.params.len - 1]});
+            .func => |call| {
+                _ = try writer.write("(func (");
+                if (call.params.items.len > 0) {
+                    for (call.params.items[0 .. call.params.items.len - 1]) |param| try writer.print("{} ", .{param});
+                    try writer.print("{}", .{call.params.items[call.params.items.len - 1]});
                 }
                 _ = try writer.write(")");
-                if (macro.body.len > 0) {
-                    for (macro.body) |expr| try writer.print("\n{}", .{expr});
+                if (call.body.items.len > 0) {
+                    for (call.body.items) |expr| try writer.print("\n{}", .{expr});
+                }
+                _ = try writer.write(")");
+            },
+            .macro => |call| {
+                _ = try writer.write("(macro (");
+                if (call.params.items.len > 0) {
+                    for (call.params.items[0 .. call.params.items.len - 1]) |param| try writer.print("{} ", .{param});
+                    try writer.print("{}", .{call.params.items[call.params.items.len - 1]});
+                }
+                _ = try writer.write(")");
+                if (call.body.items.len > 0) {
+                    for (call.body.items) |expr| try writer.print("\n{}", .{expr});
                 }
                 _ = try writer.write(")");
             },
@@ -80,6 +98,7 @@ pub const ExprTag = enum {
     identifier,
     string,
     number,
+    func,
     macro,
     native_func,
     native_macro,
@@ -101,38 +120,49 @@ pub const Interpreter = struct {
     }
 
     pub fn deinit(self: *Interpreter) void {
-        defer self.scope.deinit();
-        defer self.mem.deinit();
-        defer for (self.mem.items) |expr| expr.deinit();
+        self.scope.deinit();
+        for (self.mem.items) |expr| expr.deinit();
+        self.mem.deinit();
     }
 
     pub fn eval(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
             .list => |list| {
                 if (list.items.len == 0) return error.InterpreterEmptyList;
-                switch ((try self.eval(list.items[0])).*) {
+                const called = try self.eval(list.items[0]);
+                switch (called.*) {
                     .native_macro => |address| {
-                        const macro = @intToPtr(NativeCall, address);
-                        return try macro(self, list.items[1..]);
+                        return try @intToPtr(NativeCall, address)(self, list.items[1..]);
                     },
                     .native_func => |address| {
-                        const func = @intToPtr(NativeCall, address);
                         var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
-                        return try func(self, args_list.items);
+                        return try @intToPtr(NativeCall, address)(self, args_list.items);
                     },
-                    .macro => |macro| {
-                        if (macro.params.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
-                        if (macro.body.len < 1) return error.InterpreterMacroNoBody;
+                    .func => |func| {
+                        if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
+                        if (func.body.items.len < 1) return error.InterpreterFuncNoBody;
                         var sub_interpreter = Interpreter.init(self.allocator, self);
                         defer sub_interpreter.deinit();
-                        for (macro.params) |param, i| switch (param.*) {
+                        for (func.params.items) |param, i| switch (param.*) {
+                            .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, try sub_interpreter.eval(list.items[i + 1])),
+                            else => return error.InterpreterFuncInvalidParameter,
+                        };
+                        for (func.body.items[0 .. func.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
+                        return self.clone(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]));
+                    },
+                    .macro => |macro| {
+                        if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
+                        if (macro.body.items.len < 1) return error.InterpreterMacroNoBody;
+                        var sub_interpreter = Interpreter.init(self.allocator, self);
+                        defer sub_interpreter.deinit();
+                        for (macro.params.items) |param, i| switch (param.*) {
                             .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, list.items[i + 1]),
                             else => return error.InterpreterMacroInvalidParameter,
                         };
-                        for (macro.body[0 .. macro.body.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return self.steal(try sub_interpreter.eval(macro.body[macro.body.len - 1]));
+                        for (macro.body.items[0 .. macro.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
+                        return self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
                     },
                     else => return error.InterpreterNoSuchFunction,
                 }
@@ -141,7 +171,7 @@ pub const Interpreter = struct {
                 if (self.get(identifier.items)) |value| return value;
                 return error.InterpreterNoSuchIdentifier;
             },
-            .number, .string, .macro, .native_func, .native_macro => return expr,
+            .number, .string, .func, .macro, .native_func, .native_macro => return expr,
         }
     }
 
@@ -156,26 +186,46 @@ pub const Interpreter = struct {
         return &self.mem.items[self.mem.items.len - 1];
     }
 
-    pub fn steal(self: *Interpreter, expr: *Expr) anyerror!*Expr {
+    pub fn clone(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
-            .string => |_| return try self.store(Expr{
-                .string = std.ArrayList(u8).fromOwnedSlice(
-                    expr.string.allocator,
-                    expr.string.toOwnedSlice(),
-                ),
-            }),
+            .string => |string| {
+                var string_copy = std.ArrayList(u8).init(self.allocator);
+                errdefer string_copy.deinit();
+                try string_copy.appendSlice(string.items);
+                return try self.store(.{ .string = string_copy });
+            },
+            .identifier => |identifier| {
+                var identifier_copy = std.ArrayList(u8).init(self.allocator);
+                errdefer identifier_copy.deinit();
+                try identifier_copy.appendSlice(identifier.items);
+                return try self.store(.{ .identifier = identifier_copy });
+            },
             .number => |_| return try self.store(expr.*),
             .native_func, .native_macro => |_| return try self.store(expr.*),
-            .list => |_| {
-                var stolen_list = std.ArrayList(*Expr).fromOwnedSlice(
-                    expr.list.allocator,
-                    expr.list.toOwnedSlice(),
-                );
-                for (stolen_list.items) |branch| _ = try self.steal(branch);
-                return try self.store(Expr{ .list = stolen_list });
+            .list => |list| {
+                var list_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len);
+                errdefer list_copy.deinit();
+                for (list.items) |branch| try list_copy.append(try self.clone(branch));
+                return try self.store(.{ .list = list_copy });
             },
-            .macro => |_| unreachable, // TODO figure out how you want to handle macros, eh?
-            .identifier => |_| unreachable, // You can't evaluate an expression into an identifier
+            .func => |call| {
+                var params_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.params.items.len);
+                errdefer params_copy.deinit();
+                for (call.params.items) |branch| try params_copy.append(try self.clone(branch));
+                var body_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.body.items.len);
+                errdefer body_copy.deinit();
+                for (call.body.items) |branch| try body_copy.append(try self.clone(branch));
+                return try self.store(.{ .func = .{ .params = params_copy, .body = body_copy } });
+            },
+            .macro => |call| {
+                var params_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.params.items.len);
+                errdefer params_copy.deinit();
+                for (call.params.items) |branch| try params_copy.append(try self.clone(branch));
+                var body_copy = try std.ArrayList(*Expr).initCapacity(self.allocator, call.body.items.len);
+                errdefer body_copy.deinit();
+                for (call.body.items) |branch| try body_copy.append(try self.clone(branch));
+                return try self.store(.{ .macro = .{ .params = params_copy, .body = body_copy } });
+            },
         }
     }
 };

@@ -10,6 +10,7 @@ pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(sub) }));
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
     try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
+    try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = @ptrToInt(func) }));
     try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
     try core.scope.put("list", try core.store(interpret.Expr{ .native_func = @ptrToInt(list) }));
     return core;
@@ -60,13 +61,42 @@ fn let(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret
     }
 }
 
+fn func(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    if (args.len < 2) return error.FuncInvalidArgumentsLength;
+    const params = switch (args[0].*) {
+        .list => |params| blk: {
+            var params_copy = try std.ArrayList(*interpret.Expr).initCapacity(interpreter.allocator, params.items.len);
+            errdefer params.deinit();
+            for (params.items) |param| switch (param.*) {
+                .identifier => |_| try params_copy.append(param),
+                else => return error.FuncInvalidParameter,
+            };
+            break :blk params_copy;
+        },
+        else => return error.FuncInvalidParametersList,
+    };
+    var body = try std.ArrayList(*interpret.Expr).initCapacity(interpreter.allocator, args.len - 1);
+    for (args[1..]) |expr| try body.append(expr);
+    return interpreter.store(interpret.Expr{ .func = .{ .params = params, .body = body } });
+}
+
 fn macro(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
     if (args.len < 2) return error.MacroInvalidArgumentsLength;
     const params = switch (args[0].*) {
-        .list => |params| params.items,
+        .list => |params| blk: {
+            var params_copy = try std.ArrayList(*interpret.Expr).initCapacity(interpreter.allocator, params.items.len);
+            errdefer params.deinit();
+            for (params.items) |param| switch (param.*) {
+                .identifier => |_| try params_copy.append(param),
+                else => return error.MacroInvalidParameter,
+            };
+            break :blk params_copy;
+        },
         else => return error.MacroInvalidParametersList,
     };
-    return interpreter.store(interpret.Expr{ .macro = .{ .params = params, .body = args[1..] } });
+    var body = try std.ArrayList(*interpret.Expr).initCapacity(interpreter.allocator, args.len - 1);
+    for (args[1..]) |expr| try body.append(expr);
+    return interpreter.store(interpret.Expr{ .macro = .{ .params = params, .body = body } });
 }
 
 fn list(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {

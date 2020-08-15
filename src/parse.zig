@@ -238,8 +238,8 @@ pub const Parser = struct {
             .open_paren => blk: {
                 var list = std.ArrayList(*interpret.Expr).init(self.interpreter.allocator);
                 errdefer {
-                    defer list.deinit();
                     for (list.items) |branch| branch.deinit();
+                    list.deinit();
                 }
                 while (self.tokens[self.index].id != .close_paren) {
                     if (try self.next()) |expr| {
