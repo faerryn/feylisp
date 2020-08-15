@@ -8,9 +8,9 @@ const interpret = @import("interpret.zig");
 const library = @import("library.zig");
 
 pub fn main() !void {
-    var main_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer _ = main_allocator.deinit();
-    const allocator = &main_allocator.allocator;
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = &arena.allocator;
 
     var core = try library.initCore(allocator);
     defer core.deinit();

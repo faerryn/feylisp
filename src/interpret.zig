@@ -131,9 +131,7 @@ pub const Interpreter = struct {
                 if (list.items.len == 0) return error.InterpreterEmptyList;
                 const called = try self.eval(list.items[0]);
                 switch (called.*) {
-                    .native_macro => |address| {
-                        return try @intToPtr(NativeCall, address)(self, list.items[1..]);
-                    },
+                    .native_macro => |address| return try @intToPtr(NativeCall, address)(self, list.items[1..]),
                     .native_func => |address| {
                         var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
