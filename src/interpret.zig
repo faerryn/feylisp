@@ -107,22 +107,25 @@ pub const ExprTag = enum {
 pub const Interpreter = struct {
     allocator: *std.mem.Allocator,
     scope: std.StringHashMap(*Expr),
-    mem: std.ArrayList(Expr),
+    memory: std.ArrayList(*Expr),
     parent: ?*Interpreter,
 
     pub fn init(allocator: *std.mem.Allocator, parent: ?*Interpreter) Interpreter {
         return Interpreter{
             .allocator = allocator,
             .scope = std.StringHashMap(*Expr).init(allocator),
-            .mem = std.ArrayList(Expr).init(allocator),
+            .memory = std.ArrayList(*Expr).init(allocator),
             .parent = parent,
         };
     }
 
     pub fn deinit(self: *Interpreter) void {
         self.scope.deinit();
-        for (self.mem.items) |expr| expr.deinit();
-        self.mem.deinit();
+        for (self.memory.items) |branch| {
+            branch.deinit();
+            self.allocator.destroy(branch);
+        }
+        self.memory.deinit();
     }
 
     pub fn eval(self: *Interpreter, expr: *Expr) anyerror!*Expr {
@@ -180,8 +183,11 @@ pub const Interpreter = struct {
     }
 
     pub fn store(self: *Interpreter, expr: Expr) !*Expr {
-        try self.mem.append(expr);
-        return &self.mem.items[self.mem.items.len - 1];
+        var stored = try self.allocator.create(Expr);
+        errdefer self.allocator.destroy(stored);
+        try self.memory.append(stored);
+        stored.* = expr;
+        return stored;
     }
 
     pub fn clone(self: *Interpreter, expr: *Expr) anyerror!*Expr {
