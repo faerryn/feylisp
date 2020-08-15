@@ -56,13 +56,7 @@ pub const Expr = union(ExprTag) {
                 }
                 _ = try writer.write("\"");
             },
-            .number => |number| {
-                if (@trunc(number) == number) {
-                    try writer.print("{}", .{@floatToInt(i64, number)});
-                } else {
-                    try writer.print("{}", .{number});
-                }
-            },
+            .number => |number| try writer.print("{d:}", .{number}),
             .func => |call| {
                 _ = try writer.write("(func (");
                 if (call.params.items.len > 0) {

@@ -8,9 +8,9 @@ const interpret = @import("interpret.zig");
 const library = @import("library.zig");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = &gpa.allocator;
+    var main_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = main_allocator.deinit();
+    const allocator = &main_allocator.allocator;
 
     var core = try library.initCore(allocator);
     defer core.deinit();
