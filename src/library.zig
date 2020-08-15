@@ -6,8 +6,10 @@ const interpret = @import("interpret.zig");
 pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     var core = interpret.Interpreter.init(allocator, null);
     errdefer core.deinit();
-    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(add) }));
-    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(sub) }));
+    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.add).accumulate) }));
+    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.sub).accumulate) }));
+    try core.scope.put("*", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.mul).accumulate) }));
+    try core.scope.put("/", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.div).accumulate) }));
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
     try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
     try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = @ptrToInt(func) }));
@@ -16,26 +18,28 @@ pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     return core;
 }
 
-fn add(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
-    var acc: f64 = 0.0;
-    for (args) |arg| {
-        switch (arg.*) {
-            .number => |num| acc += num,
-            else => return error.AddNotANumber,
+const Operation = enum { add, sub, mul, div };
+fn Accumulator(comptime op: Operation) type {
+    return struct {
+        fn accumulate(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+            var acc: f64 = switch (op) {
+                .add, .sub => 0.0,
+                .mul, .div => 1.0,
+            };
+            for (args) |arg| {
+                switch (arg.*) {
+                    .number => |num| switch (op) {
+                        .add => acc += num,
+                        .sub => acc -= num,
+                        .mul => acc *= num,
+                        .div => acc /= num,
+                    },
+                    else => return error.AddNotANumber,
+                }
+            }
+            return try interpreter.store(interpret.Expr{ .number = acc });
         }
-    }
-    return try interpreter.store(interpret.Expr{ .number = acc });
-}
-
-fn sub(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
-    var acc: f64 = 0.0;
-    for (args) |arg| {
-        switch (arg.*) {
-            .number => |num| acc -= num,
-            else => return error.AddNotANumber,
-        }
-    }
-    return try interpreter.store(interpret.Expr{ .number = acc });
+    };
 }
 
 fn print(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
