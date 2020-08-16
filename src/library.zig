@@ -15,11 +15,12 @@ pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = @ptrToInt(func) }));
     try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
     try core.scope.put("list", try core.store(interpret.Expr{ .native_func = @ptrToInt(list) }));
+    try core.scope.put("if", try core.store(interpret.Expr{ .native_macro = @ptrToInt(@"if") }));
     return core;
 }
 
 const Operation = enum { add, sub, mul, div };
-fn Accumulator(comptime op: Operation) type {
+fn Accumulator(op: Operation) type {
     return struct {
         fn accumulate(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
             var acc: f64 = switch (op) {
@@ -108,4 +109,20 @@ fn list(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpre
     errdefer exprs.deinit();
     for (args) |arg| try exprs.append(arg);
     return interpreter.store(interpret.Expr{ .list = exprs });
+}
+
+fn @"if"(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    if (args.len < 3) return error.IfInvalidArgumentsLength;
+    const cond = switch ((try interpreter.eval(args[0])).*) {
+        .list => |cond_expr| cond_expr.items.len > 0,
+        else => true,
+    };
+    if (cond) {
+        return try interpreter.eval(args[1]);
+    } else {
+        if (args.len > 3) {
+            for (args[2 .. args.len - 1]) |branch| _ = try interpreter.eval(branch);
+        }
+        return try interpreter.eval(args[args.len - 1]);
+    }
 }

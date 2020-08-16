@@ -36,12 +36,16 @@ pub const Expr = union(ExprTag) {
     ) !void {
         switch (self) {
             .list => |list| {
-                _ = try writer.write("(");
-                if (list.items.len > 0) {
-                    for (list.items[0 .. list.items.len - 1]) |expr| try writer.print("{} ", .{expr.*});
-                    try writer.print("{}", .{list.items[list.items.len - 1]});
+                if (list.items.len == 0) {
+                    _ = try writer.write("nil");
+                } else {
+                    _ = try writer.write("(");
+                    if (list.items.len > 0) {
+                        for (list.items[0 .. list.items.len - 1]) |expr| try writer.print("{} ", .{expr.*});
+                        try writer.print("{}", .{list.items[list.items.len - 1]});
+                    }
+                    _ = try writer.write(")");
                 }
-                _ = try writer.write(")");
             },
             .identifier => |identifier| try writer.print("{}", .{identifier.items}),
             .string => |string| {
@@ -125,7 +129,7 @@ pub const Interpreter = struct {
     pub fn eval(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
             .list => |list| {
-                if (list.items.len == 0) return error.InterpreterEmptyList;
+                if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
                 switch (called.*) {
                     .native_macro => |address| return try @intToPtr(NativeCall, address)(self, list.items[1..]),
