@@ -226,13 +226,13 @@ pub const Interpreter = struct {
 
     pub fn steal(self: *Interpreter, expr: *Expr) anyerror!*Expr {
         switch (expr.*) {
-            .string, .identifier => |_| {
+            .string => |_| {
                 const string_stolen = std.ArrayList(u8).fromOwnedSlice(expr.string.allocator, expr.string.toOwnedSlice());
-                switch (expr.*) {
-                    .string => return try self.store(.{ .string = string_stolen }),
-                    .identifier => return try self.store(.{ .identifier = string_stolen }),
-                    else => unreachable,
-                }
+                return try self.store(.{ .string = string_stolen });
+            },
+            .identifier => |_| {
+                const identifier_stolen = std.ArrayList(u8).fromOwnedSlice(expr.identifier.allocator, expr.identifier.toOwnedSlice());
+                return try self.store(.{ .identifier = identifier_stolen });
             },
             .number => |_| return try self.store(expr.*),
             .native_func, .native_macro => |_| return try self.store(expr.*),
@@ -242,18 +242,23 @@ pub const Interpreter = struct {
                 for (list_stolen.items) |branch| _ = try self.steal(branch);
                 return try self.store(.{ .list = list_stolen });
             },
-            .func, .macro => |_| {
+            .func => |_| {
                 var params_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.func.params.allocator, expr.func.params.toOwnedSlice());
                 errdefer params_stolen.deinit();
                 for (params_stolen.items) |branch| _ = try self.steal(branch);
                 var body_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.func.body.allocator, expr.func.body.toOwnedSlice());
                 errdefer body_stolen.deinit();
                 for (body_stolen.items) |branch| _ = try self.steal(branch);
-                switch (expr.*) {
-                    .func => return try self.store(.{ .func = .{ .params = params_stolen, .body = body_stolen } }),
-                    .macro => return try self.store(.{ .func = .{ .params = params_stolen, .body = body_stolen } }),
-                    else => unreachable,
-                }
+                return try self.store(.{ .func = .{ .params = params_stolen, .body = body_stolen } });
+            },
+            .macro => |_| {
+                var params_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.macro.params.allocator, expr.macro.params.toOwnedSlice());
+                errdefer params_stolen.deinit();
+                for (params_stolen.items) |branch| _ = try self.steal(branch);
+                var body_stolen = std.ArrayList(*Expr).fromOwnedSlice(expr.macro.body.allocator, expr.macro.body.toOwnedSlice());
+                errdefer body_stolen.deinit();
+                for (body_stolen.items) |branch| _ = try self.steal(branch);
+                return try self.store(.{ .macro = .{ .params = params_stolen, .body = body_stolen } });
             },
         }
     }
