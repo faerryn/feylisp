@@ -13,8 +13,8 @@ pub const Expr = union(ExprTag) {
     number: f64,
     func: Call,
     macro: Call,
-    native_func: usize,
-    native_macro: usize,
+    native_func: NativeCall,
+    native_macro: NativeCall,
 
     pub fn deinit(self: Expr) void {
         switch (self) {
@@ -85,8 +85,8 @@ pub const Expr = union(ExprTag) {
                 }
                 _ = try writer.write(")");
             },
-            .native_func => |address| try writer.print("func@{}", .{address}),
-            .native_macro => |address| try writer.print("macro@{}", .{address}),
+            .native_func => |native_call| try writer.print("func@{}", .{native_call}),
+            .native_macro => |native_call| try writer.print("macro@{}", .{native_call}),
         }
     }
 };
@@ -132,12 +132,12 @@ pub const Interpreter = struct {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
                 switch (called.*) {
-                    .native_macro => |address| return try @intToPtr(NativeCall, address)(self, list.items[1..]),
-                    .native_func => |address| {
+                    .native_macro => |native_call| return try native_call(self, list.items[1..]),
+                    .native_func => |native_call| {
                         var args_list = try std.ArrayList(*Expr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
-                        return try @intToPtr(NativeCall, address)(self, args_list.items);
+                        return try native_call(self, args_list.items);
                     },
                     .func => |func| {
                         if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;

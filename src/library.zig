@@ -6,26 +6,26 @@ const interpret = @import("interpret.zig");
 pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     var core = interpret.Interpreter.init(allocator, null);
     errdefer core.deinit();
-    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.add).accumulate) }));
-    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.sub).accumulate) }));
-    try core.scope.put("*", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.mul).accumulate) }));
-    try core.scope.put("/", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.div).accumulate) }));
-    try core.scope.put("=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.eq).accumulate) }));
-    try core.scope.put("!=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.neq).accumulate) }));
-    try core.scope.put("<", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lt).accumulate) }));
-    try core.scope.put("<=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lteq).accumulate) }));
-    try core.scope.put(">", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gt).accumulate) }));
-    try core.scope.put(">=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gteq).accumulate) }));
-    try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
-    try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
-    try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = @ptrToInt(func) }));
-    try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
-    try core.scope.put("if", try core.store(interpret.Expr{ .native_macro = @ptrToInt(@"if") }));
-    try core.scope.put("while", try core.store(interpret.Expr{ .native_macro = @ptrToInt(@"while") }));
-    try core.scope.put("list", try core.store(interpret.Expr{ .native_func = @ptrToInt(list) }));
-    try core.scope.put("len", try core.store(interpret.Expr{ .native_func = @ptrToInt(len) }));
-    try core.scope.put("at", try core.store(interpret.Expr{ .native_func = @ptrToInt(at) }));
-    try core.scope.put("push", try core.store(interpret.Expr{ .native_func = @ptrToInt(push) }));
+    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = OperationAccumulator(.add).accumulate }));
+    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = OperationAccumulator(.sub).accumulate }));
+    try core.scope.put("*", try core.store(interpret.Expr{ .native_func = OperationAccumulator(.mul).accumulate }));
+    try core.scope.put("/", try core.store(interpret.Expr{ .native_func = OperationAccumulator(.div).accumulate }));
+    try core.scope.put("=", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.eq).accumulate }));
+    try core.scope.put("!=", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.neq).accumulate }));
+    try core.scope.put("<", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.lt).accumulate }));
+    try core.scope.put("<=", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.lteq).accumulate }));
+    try core.scope.put(">", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.gt).accumulate }));
+    try core.scope.put(">=", try core.store(interpret.Expr{ .native_func = ComparisonAccumulator(.gteq).accumulate }));
+    try core.scope.put("print", try core.store(interpret.Expr{ .native_func = print }));
+    try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = let }));
+    try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = func }));
+    try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = macro }));
+    try core.scope.put("if", try core.store(interpret.Expr{ .native_macro = @"if" }));
+    try core.scope.put("while", try core.store(interpret.Expr{ .native_macro = @"while" }));
+    try core.scope.put("list", try core.store(interpret.Expr{ .native_func = list }));
+    try core.scope.put("len", try core.store(interpret.Expr{ .native_func = len }));
+    try core.scope.put("at", try core.store(interpret.Expr{ .native_func = at }));
+    try core.scope.put("push", try core.store(interpret.Expr{ .native_func = push }));
     return core;
 }
 
@@ -176,9 +176,11 @@ fn len(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret
 
 fn at(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
     if (args.len != 2) return error.AtInvalidArguments;
-    if (args[0].* != .list) return error.PushNotAList;
-    if (args[1].* != .number) return error.PushNotANumber;
-    return args[0].list.items[@floatToInt(usize, args[1].number)];
+    if (args[0].* != .list) return error.AtNotAList;
+    if (args[1].* != .number) return error.AtNotANumber;
+    const index = @floatToInt(isize, args[1].number);
+    if (index < 0 or index >= args[0].list.items.len) return error.AtIndexOutOfBounds;
+    return args[0].list.items[@intCast(usize, index)];
 }
 
 fn push(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
