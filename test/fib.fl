@@ -1,0 +1,8 @@
+(let fib (func (n)
+	       (if (< n 2)
+		 n
+		 (+ (fib (+ n -1)) (fib (+ n -2))))))
+(let i 0)
+(while (< i 20)
+       (print "fib(" i ") =\t" (fib i) "\n")
+       (let i (+ i 1)))

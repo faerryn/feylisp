@@ -17,6 +17,24 @@ pub fn main() !void {
     var interpreter = interpret.Interpreter.init(allocator, &core);
     defer interpreter.deinit();
 
+    var args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    if (args.len > 1) {
+        for (args[1..]) |path| {
+            var file = try std.fs.cwd().openFile(path, .{});
+            defer file.close();
+            const len = try file.getEndPos();
+            var source = std.ArrayList(u8).init(allocator);
+            defer source.deinit();
+            try file.reader().readAllArrayList(&source, len);
+            try evalSource(allocator, &interpreter, source.items, false);
+        }
+    } else {
+        try repl(allocator, &core);
+    }
+}
+
+pub fn repl(allocator: *std.mem.Allocator, interpreter: *interpret.Interpreter) !void {
     repl_loop: while (true) {
         const PROMPT = " >> ";
         _ = try stdout.write(PROMPT);
@@ -55,16 +73,22 @@ pub fn main() !void {
                 else => {},
             }
         }
+        try evalSource(allocator, interpreter, source.items, true);
+    }
+}
 
-        var tokenizer = parse.Tokenizer.init(source.items);
-        var tokens = std.ArrayList(parse.Token).init(allocator);
-        defer tokens.deinit();
-        while (try tokenizer.next()) |token| try tokens.append(token);
+pub fn evalSource(allocator: *std.mem.Allocator, interpreter: *interpret.Interpreter, source: []const u8, in_repl: bool) !void {
+    var tokenizer = parse.Tokenizer.init(source);
+    var tokens = std.ArrayList(parse.Token).init(allocator);
+    defer tokens.deinit();
+    while (try tokenizer.next()) |token| try tokens.append(token);
 
-        var parser = parse.Parser.init(&interpreter, source.items, tokens.items);
-        while (try parser.next()) |expr| {
-            const result = interpreter.eval(expr);
-            try stdout.print("{}\n", .{result});
+    var parser = parse.Parser.init(interpreter, source, tokens.items);
+    while (try parser.next()) |expr| {
+        if (interpreter.eval(expr)) |result| {
+            if (in_repl) try stdout.print("{}\n", .{result});
+        } else |err| {
+            try stderr.print("{}\n", .{err});
         }
     }
 }
