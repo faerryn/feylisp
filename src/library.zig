@@ -6,21 +6,28 @@ const interpret = @import("interpret.zig");
 pub fn initCore(allocator: *std.mem.Allocator) !interpret.Interpreter {
     var core = interpret.Interpreter.init(allocator, null);
     errdefer core.deinit();
-    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.add).accumulate) }));
-    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.sub).accumulate) }));
-    try core.scope.put("*", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.mul).accumulate) }));
-    try core.scope.put("/", try core.store(interpret.Expr{ .native_func = @ptrToInt(Accumulator(.div).accumulate) }));
+    try core.scope.put("+", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.add).accumulate) }));
+    try core.scope.put("-", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.sub).accumulate) }));
+    try core.scope.put("*", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.mul).accumulate) }));
+    try core.scope.put("/", try core.store(interpret.Expr{ .native_func = @ptrToInt(OperationAccumulator(.div).accumulate) }));
+    try core.scope.put("=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.eq).accumulate) }));
+    try core.scope.put("!=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.neq).accumulate) }));
+    try core.scope.put("<", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lt).accumulate) }));
+    try core.scope.put("<=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lteq).accumulate) }));
+    try core.scope.put(">", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gt).accumulate) }));
+    try core.scope.put(">=", try core.store(interpret.Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gteq).accumulate) }));
     try core.scope.put("print", try core.store(interpret.Expr{ .native_func = @ptrToInt(print) }));
     try core.scope.put("let", try core.store(interpret.Expr{ .native_macro = @ptrToInt(let) }));
     try core.scope.put("func", try core.store(interpret.Expr{ .native_macro = @ptrToInt(func) }));
     try core.scope.put("macro", try core.store(interpret.Expr{ .native_macro = @ptrToInt(macro) }));
     try core.scope.put("list", try core.store(interpret.Expr{ .native_func = @ptrToInt(list) }));
     try core.scope.put("if", try core.store(interpret.Expr{ .native_macro = @ptrToInt(@"if") }));
+    try core.scope.put("while", try core.store(interpret.Expr{ .native_macro = @ptrToInt(@"while") }));
     return core;
 }
 
 const Operation = enum { add, sub, mul, div };
-fn Accumulator(op: Operation) type {
+fn OperationAccumulator(op: Operation) type {
     return struct {
         fn accumulate(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
             var acc: f64 = switch (op) {
@@ -39,6 +46,30 @@ fn Accumulator(op: Operation) type {
                 }
             }
             return try interpreter.store(interpret.Expr{ .number = acc });
+        }
+    };
+}
+
+const Comparison = enum { eq, neq, gt, gteq, lt, lteq };
+fn ComparisonAccumulator(comp: Comparison) type {
+    return struct {
+        fn accumulate(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+            const first = switch (args[0].*) {
+                .number => |number| number,
+                else => return error.ComparisonArgumentNotANumber,
+            };
+            for (args[1..]) |branch| switch (branch.*) {
+                .number => |number| if (!switch (comp) {
+                    .eq => first == number,
+                    .neq => first != number,
+                    .gt => first > number,
+                    .gteq => first >= number,
+                    .lt => first < number,
+                    .lteq => first <= number,
+                }) return interpreter.store(.{ .list = std.ArrayList(*interpret.Expr).init(interpreter.allocator) }),
+                else => return error.ComparisonArgumentNotANumber,
+            };
+            return interpreter.store(.{ .number = 1.0 });
         }
     };
 }
@@ -125,4 +156,15 @@ fn @"if"(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpr
         }
         return try interpreter.eval(args[args.len - 1]);
     }
+}
+
+fn @"while"(interpreter: *interpret.Interpreter, args: []*interpret.Expr) !*interpret.Expr {
+    if (args.len < 2) return error.IfInvalidArgumentsLength;
+    while (switch ((try interpreter.eval(args[0])).*) {
+        .list => |cond_expr| cond_expr.items.len > 0,
+        else => true,
+    }) {
+        for (args[1..]) |branch| _ = try interpreter.eval(branch);
+    }
+    return interpreter.store(.{ .list = std.ArrayList(*interpret.Expr).init(interpreter.allocator) });
 }
