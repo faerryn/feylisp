@@ -46,9 +46,9 @@ const Operation = enum { add, sub, mul, div };
 fn OperationAccumulator(op: Operation) type {
     return struct {
         fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
-            var acc: f64 = switch (op) {
-                .add, .sub => 0.0,
-                .mul, .div => 1.0,
+            var acc: isize = switch (op) {
+                .add, .sub => 0,
+                .mul, .div => 1,
             };
             for (args) |arg| {
                 switch (arg) {
@@ -56,7 +56,7 @@ fn OperationAccumulator(op: Operation) type {
                         .add => acc += num,
                         .sub => acc -= num,
                         .mul => acc *= num,
-                        .div => acc /= num,
+                        .div => acc = @divTrunc(acc, num),
                     },
                     else => return error.AddNotANumber,
                 }
@@ -180,14 +180,14 @@ fn list(interpreter: *Interpreter, args: []Expr) !Expr {
 fn len(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len != 1) return error.LenInvalidArguments;
     if (args[0] != .list) return error.PushNotAList;
-    return Expr{ .number = @intToFloat(f64, args[0].list.items.len) };
+    return Expr{ .number = @intCast(isize, args[0].list.items.len) };
 }
 
 fn at(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len != 2) return error.AtInvalidArguments;
     if (args[0] != .list) return error.AtNotAList;
     if (args[1] != .number) return error.AtNotANumber;
-    const index = @floatToInt(isize, args[1].number);
+    const index = args[1].number;
     if (index < 0 or index >= args[0].list.items.len) return error.AtIndexOutOfBounds;
     return args[0].list.items[@intCast(usize, index)];
 }

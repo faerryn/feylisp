@@ -10,7 +10,7 @@ pub const Expr = union(ExprTag) {
     list: *std.ArrayList(Expr),
     identifier: *std.ArrayList(u8),
     string: *std.ArrayList(u8),
-    number: f64,
+    number: isize,
     t,
     nil,
     func: Call,

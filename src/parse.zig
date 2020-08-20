@@ -238,7 +238,7 @@ pub const Parser = struct {
                 return try self.interpreter.store(Expr{ .string = list });
             },
             .integer_literal, .float_literal => {
-                const num = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
+                const num = try std.fmt.parseInt(isize, self.source[t.start..t.end], 10);
                 return Expr{ .number = num };
             },
             .open_paren => {
