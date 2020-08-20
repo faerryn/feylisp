@@ -139,16 +139,12 @@ pub const Interpreter = struct {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
                 switch (called) {
-                    .native_macro => |native_call| {
-                        const result = try @intToPtr(NativeCall, native_call)(self, list.items[1..]);
-                        return self.store(result);
-                    },
+                    .native_macro => |native_call| return try @intToPtr(NativeCall, native_call)(self, list.items[1..]),
                     .native_func => |native_call| {
                         var args_list = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
-                        const result = try @intToPtr(NativeCall, native_call)(self, args_list.items);
-                        return self.store(result);
+                        return try @intToPtr(NativeCall, native_call)(self, args_list.items);
                     },
                     .func => |func| {
                         if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
@@ -194,7 +190,7 @@ pub const Interpreter = struct {
     pub fn store(self: *Interpreter, expr: Expr) !Expr {
         switch (expr) {
             .list, .string, .identifier, .func, .macro => try self.heap.append(expr),
-            .number, .boolean, .native_func, .native_macro => {},
+            .number, .boolean, .native_func, .native_macro => return error.StoreNotHeapAllocated,
         }
         return expr;
     }

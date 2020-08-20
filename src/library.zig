@@ -3,6 +3,7 @@ const stdout = std.io.getStdOut().writer();
 
 const interpret = @import("interpret.zig");
 const Expr = interpret.Expr;
+const Call = interpret.Call;
 const Interpreter = interpret.Interpreter;
 
 pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
@@ -20,8 +21,8 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     try core.scope.put(">=", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gteq).accumulate) });
     try core.scope.put("print", Expr{ .native_func = @ptrToInt(print) });
     try core.scope.put("let", Expr{ .native_macro = @ptrToInt(let) });
-    try core.scope.put("func", Expr{ .native_macro = @ptrToInt(func) });
-    try core.scope.put("macro", Expr{ .native_macro = @ptrToInt(macro) });
+    try core.scope.put("func", Expr{ .native_macro = @ptrToInt(Callable(.func).call) });
+    try core.scope.put("macro", Expr{ .native_macro = @ptrToInt(Callable(.macro).call) });
     try core.scope.put("if", Expr{ .native_macro = @ptrToInt(@"if") });
     try core.scope.put("while", Expr{ .native_macro = @ptrToInt(@"while") });
     try core.scope.put("list", Expr{ .native_func = @ptrToInt(list) });
@@ -102,46 +103,38 @@ fn let(interpreter: *Interpreter, args: []Expr) !Expr {
     }
 }
 
-fn func(interpreter: *Interpreter, args: []Expr) !Expr {
-    if (args.len < 2) return error.FuncInvalidArguments;
-    if (args[0] != .list) return error.FuncNoParameters;
-    var params = try interpreter.allocator.create(std.ArrayList(Expr));
-    errdefer interpreter.allocator.destroy(params);
-    params.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
-    errdefer params.deinit();
-    for (args[0].list.items) |param| {
-        if (param == .identifier) {
-            try params.append(param);
-        } else {
-            return error.FuncInvalidParameter;
+const CallableType = enum {
+    func,
+    macro,
+};
+fn Callable(callable_type: CallableType) type {
+    return struct {
+        fn call(interpreter: *Interpreter, args: []Expr) !Expr {
+            if (args.len < 2) return error.FuncInvalidArguments;
+            if (args[0] != .list) return error.FuncNoParameters;
+            var params = try interpreter.allocator.create(std.ArrayList(Expr));
+            errdefer interpreter.allocator.destroy(params);
+            params.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
+            errdefer params.deinit();
+            for (args[0].list.items) |param| {
+                if (param == .identifier) {
+                    try params.append(param);
+                } else {
+                    return error.FuncInvalidParameter;
+                }
+            }
+            var body = try interpreter.allocator.create(std.ArrayList(Expr));
+            errdefer interpreter.allocator.destroy(body);
+            body.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
+            errdefer body.deinit();
+            for (args[1..]) |expr| try body.append(expr);
+            const callable = Call{ .params = params, .body = body };
+            switch (callable_type) {
+                .func => return try interpreter.store(Expr{ .func = callable }),
+                .macro => return try interpreter.store(Expr{ .macro = callable }),
+            }
         }
-    }
-    var body = try interpreter.allocator.create(std.ArrayList(Expr));
-    errdefer interpreter.allocator.destroy(body);
-    body.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
-    for (args[1..]) |expr| try body.append(expr);
-    return Expr{ .func = .{ .params = params, .body = body } };
-}
-
-fn macro(interpreter: *Interpreter, args: []Expr) !Expr {
-    if (args.len < 2) return error.MacroInvalidArguments;
-    if (args[0] != .list) return error.FuncNoParameters;
-    var params = try interpreter.allocator.create(std.ArrayList(Expr));
-    errdefer interpreter.allocator.destroy(params);
-    params.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
-    errdefer params.deinit();
-    for (args[0].list.items) |param| {
-        if (param == .identifier) {
-            try params.append(param);
-        } else {
-            return error.MacroInvalidParameter;
-        }
-    }
-    var body = try interpreter.allocator.create(std.ArrayList(Expr));
-    errdefer interpreter.allocator.destroy(body);
-    body.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
-    for (args[1..]) |expr| try body.append(expr);
-    return Expr{ .macro = .{ .params = params, .body = body } };
+    };
 }
 
 fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
@@ -177,7 +170,7 @@ fn list(interpreter: *Interpreter, args: []Expr) !Expr {
     exprs.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len);
     errdefer exprs.deinit();
     for (args) |arg| try exprs.append(arg);
-    return Expr{ .list = exprs };
+    return try interpreter.store(Expr{ .list = exprs });
 }
 
 fn len(interpreter: *Interpreter, args: []Expr) !Expr {
