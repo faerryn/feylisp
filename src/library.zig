@@ -9,6 +9,8 @@ const Interpreter = interpret.Interpreter;
 pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     var core = Interpreter.init(allocator, null);
     errdefer core.deinit();
+    try core.scope.put("nil", Expr{ .nil = undefined });
+    try core.scope.put("t", Expr{ .t = undefined });
     try core.scope.put("+", Expr{ .native_func = @ptrToInt(OperationAccumulator(.add).accumulate) });
     try core.scope.put("-", Expr{ .native_func = @ptrToInt(OperationAccumulator(.sub).accumulate) });
     try core.scope.put("*", Expr{ .native_func = @ptrToInt(OperationAccumulator(.mul).accumulate) });
@@ -72,10 +74,10 @@ fn ComparisonAccumulator(comp: Comparison) type {
                     .gteq => first >= number,
                     .lt => first < number,
                     .lteq => first <= number,
-                }) return Expr{ .boolean = false },
+                }) return Expr{ .nil = undefined },
                 else => return error.ComparisonNotANumber,
             };
-            return Expr{ .boolean = true };
+            return Expr{ .t = undefined };
         }
     };
 }
@@ -140,8 +142,7 @@ fn Callable(callable_type: CallableType) type {
 fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len < 3) return error.IfInvalidArguments;
     const cond = try interpreter.eval(args[0]);
-    if (cond != .boolean) return error.IfInvalidConditiona;
-    if (cond.boolean) {
+    if (cond != .nil) {
         return try interpreter.eval(args[1]);
     } else {
         if (args.len > 3) {
@@ -153,10 +154,7 @@ fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
 
 fn @"while"(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len < 2) return error.WhileInvalidArguments;
-    while (switch ((try interpreter.eval(args[0]))) {
-        .boolean => |boolean| boolean,
-        else => return error.WhileInvalidConditional,
-    }) {
+    while ((try interpreter.eval(args[0])) != .nil) {
         for (args[1..]) |branch| _ = try interpreter.eval(branch);
     }
     return Expr{ .nil = undefined };

@@ -11,7 +11,7 @@ pub const Expr = union(ExprTag) {
     identifier: *std.ArrayList(u8),
     string: *std.ArrayList(u8),
     number: f64,
-    boolean: bool,
+    t,
     nil,
     func: Call,
     macro: Call,
@@ -26,7 +26,7 @@ pub const Expr = union(ExprTag) {
                 call.params.deinit();
                 call.body.deinit();
             },
-            .number, .boolean, .nil, .native_func, .native_macro => {},
+            .number, .t, .nil, .native_func, .native_macro => {},
         }
     }
 
@@ -59,7 +59,7 @@ pub const Expr = union(ExprTag) {
                 _ = try writer.write("\"");
             },
             .number => |number| try writer.print("{d:}", .{number}),
-            .boolean => |boolean| try writer.print("{}", .{boolean}),
+            .t => _ = try writer.write("t"),
             .nil => _ = try writer.write("nil"),
             .func => |call| {
                 _ = try writer.write("(func (");
@@ -96,7 +96,7 @@ pub const ExprTag = enum {
     identifier,
     string,
     number,
-    boolean,
+    t,
     nil,
     func,
     macro,
@@ -124,7 +124,7 @@ pub const Interpreter = struct {
         for (self.heap.items) |branch| {
             branch.deinit();
             switch (branch) {
-                .number, .boolean, .nil, .native_func, .native_macro => {},
+                .number, .t, .nil, .native_func, .native_macro => {},
                 .list => |list| self.allocator.destroy(list),
                 .identifier, .string => |list| self.allocator.destroy(list),
                 .func, .macro => |call| {
@@ -138,7 +138,7 @@ pub const Interpreter = struct {
 
     pub fn eval(self: *Interpreter, expr: Expr) anyerror!Expr {
         switch (expr) {
-            .number, .boolean, .nil, .string, .func, .macro, .native_func, .native_macro => return expr,
+            .number, .t, .nil, .string, .func, .macro, .native_func, .native_macro => return expr,
             .list => |list| {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
@@ -193,14 +193,14 @@ pub const Interpreter = struct {
     pub fn store(self: *Interpreter, expr: Expr) !Expr {
         switch (expr) {
             .list, .string, .identifier, .func, .macro => try self.heap.append(expr),
-            .number, .boolean, .nil, .native_func, .native_macro => return error.StoreNotHeapAllocated,
+            .number, .t, .nil, .native_func, .native_macro => return error.StoreNotHeapAllocated,
         }
         return expr;
     }
 
     pub fn clone(self: *Interpreter, expr: Expr, steal: bool) anyerror!Expr {
         switch (expr) {
-            .number, .boolean, .nil, .native_func, .native_macro => return expr,
+            .number, .t, .nil, .native_func, .native_macro => return expr,
             .string, .identifier => |string| {
                 var copy = try self.allocator.create(std.ArrayList(u8));
                 errdefer self.allocator.destroy(copy);
