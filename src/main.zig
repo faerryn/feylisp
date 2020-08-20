@@ -85,7 +85,6 @@ pub fn evalSource(allocator: *std.mem.Allocator, interpreter: *Interpreter, sour
 
     var parser = parse.Parser.init(interpreter, source, tokens.items);
     while (try parser.next()) |expr| {
-        try stdout.print("{}\n", .{expr});
         if (interpreter.eval(expr)) |result| {
             if (in_repl) try stdout.print("{}\n", .{result});
         } else |err| {

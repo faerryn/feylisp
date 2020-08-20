@@ -3,4 +3,4 @@
 	       (if (< n (len mem))
 		 (at mem n)
 		 (push mem (+ (fib (+ n -1)) (fib (+ n -2)))))))
-(print (fib 7) "\n")
+(print (fib 70) "\n")

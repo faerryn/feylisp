@@ -12,6 +12,7 @@ pub const Expr = union(ExprTag) {
     string: *std.ArrayList(u8),
     number: f64,
     boolean: bool,
+    nil,
     func: Call,
     macro: Call,
     native_func: usize,
@@ -25,7 +26,7 @@ pub const Expr = union(ExprTag) {
                 call.params.deinit();
                 call.body.deinit();
             },
-            .number, .boolean, .native_func, .native_macro => {},
+            .number, .boolean, .nil, .native_func, .native_macro => {},
         }
     }
 
@@ -59,6 +60,7 @@ pub const Expr = union(ExprTag) {
             },
             .number => |number| try writer.print("{d:}", .{number}),
             .boolean => |boolean| try writer.print("{}", .{boolean}),
+            .nil => _ = try writer.write("nil"),
             .func => |call| {
                 _ = try writer.write("(func (");
                 if (call.params.items.len > 0) {
@@ -95,6 +97,7 @@ pub const ExprTag = enum {
     string,
     number,
     boolean,
+    nil,
     func,
     macro,
     native_func,
@@ -121,13 +124,13 @@ pub const Interpreter = struct {
         for (self.heap.items) |branch| {
             branch.deinit();
             switch (branch) {
+                .number, .boolean, .nil, .native_func, .native_macro => {},
                 .list => |list| self.allocator.destroy(list),
                 .identifier, .string => |list| self.allocator.destroy(list),
                 .func, .macro => |call| {
                     self.allocator.destroy(call.params);
                     self.allocator.destroy(call.body);
                 },
-                .number, .boolean, .native_func, .native_macro => {},
             }
         }
         self.heap.deinit();
@@ -135,6 +138,7 @@ pub const Interpreter = struct {
 
     pub fn eval(self: *Interpreter, expr: Expr) anyerror!Expr {
         switch (expr) {
+            .number, .boolean, .nil, .string, .func, .macro, .native_func, .native_macro => return expr,
             .list => |list| {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
@@ -177,7 +181,6 @@ pub const Interpreter = struct {
                 if (self.get(identifier.items)) |value| return value;
                 return error.InterpreterNoSuchIdentifier;
             },
-            .number, .boolean, .string, .func, .macro, .native_func, .native_macro => return expr,
         }
     }
 
@@ -190,49 +193,55 @@ pub const Interpreter = struct {
     pub fn store(self: *Interpreter, expr: Expr) !Expr {
         switch (expr) {
             .list, .string, .identifier, .func, .macro => try self.heap.append(expr),
-            .number, .boolean, .native_func, .native_macro => return error.StoreNotHeapAllocated,
+            .number, .boolean, .nil, .native_func, .native_macro => return error.StoreNotHeapAllocated,
         }
         return expr;
     }
 
     pub fn clone(self: *Interpreter, expr: Expr) anyerror!Expr {
         switch (expr) {
-            .number, .boolean, .native_func, .native_macro => return expr,
+            .number, .boolean, .nil, .native_func, .native_macro => return expr,
             .string => |string| {
-                var copy = std.ArrayList(u8).init(self.allocator);
+                var copy = try self.allocator.create(std.ArrayList(u8));
+                errdefer self.allocator.destroy(copy);
+                copy.* = std.ArrayList(u8).init(self.allocator);
                 errdefer copy.deinit();
                 try copy.appendSlice(string.items);
-                return self.store(Expr{ .string = &copy });
+                return self.store(Expr{ .string = copy });
             },
             .identifier => |identifier| {
-                var copy = std.ArrayList(u8).init(self.allocator);
+                var copy = try self.allocator.create(std.ArrayList(u8));
+                errdefer self.allocator.destroy(copy);
+                copy.* = std.ArrayList(u8).init(self.allocator);
                 errdefer copy.deinit();
                 try copy.appendSlice(identifier.items);
-                return self.store(Expr{ .identifier = &copy });
+                return self.store(Expr{ .identifier = copy });
             },
             .list => |list| {
-                var copy = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
+                var copy = try self.allocator.create(std.ArrayList(Expr));
+                errdefer self.allocator.destroy(copy);
+                copy.* = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
                 errdefer copy.deinit();
                 for (list.items) |branch| try copy.append(try self.clone(branch));
-                return self.store(Expr{ .list = &copy });
+                return self.store(Expr{ .list = copy });
             },
-            .func => |func| {
-                var params = try std.ArrayList(Expr).initCapacity(self.allocator, func.params.items.len);
+            .func, .macro => |call| {
+                var params = try self.allocator.create(std.ArrayList(Expr));
+                errdefer self.allocator.destroy(params);
+                params.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
                 errdefer params.deinit();
-                for (func.params.items) |branch| try params.append(try self.clone(branch));
-                var body = try std.ArrayList(Expr).initCapacity(self.allocator, func.body.items.len);
+                for (call.params.items) |branch| try params.append(try self.clone(branch));
+                var body = try self.allocator.create(std.ArrayList(Expr));
+                errdefer self.allocator.destroy(body);
+                body.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
                 errdefer body.deinit();
-                for (func.body.items) |branch| try body.append(try self.clone(branch));
-                return self.store(Expr{ .func = .{ .params = &params, .body = &body } });
-            },
-            .macro => |macro| {
-                var params = try std.ArrayList(Expr).initCapacity(self.allocator, macro.params.items.len);
-                errdefer params.deinit();
-                for (macro.params.items) |branch| try params.append(try self.clone(branch));
-                var body = try std.ArrayList(Expr).initCapacity(self.allocator, macro.body.items.len);
-                errdefer body.deinit();
-                for (macro.body.items) |branch| try body.append(try self.clone(branch));
-                return self.store(Expr{ .macro = .{ .params = &params, .body = &body } });
+                for (call.body.items) |branch| try body.append(try self.clone(branch));
+                const copy = Call{ .params = params, .body = body };
+                switch (expr) {
+                    .func => return self.store(Expr{ .func = copy }),
+                    .macro => return self.store(Expr{ .macro = copy }),
+                    else => unreachable,
+                }
             },
         }
     }

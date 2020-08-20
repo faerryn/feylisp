@@ -139,11 +139,9 @@ fn Callable(callable_type: CallableType) type {
 
 fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len < 3) return error.IfInvalidArguments;
-    const cond = switch ((try interpreter.eval(args[0]))) {
-        .list => |cond| cond.items.len > 0,
-        else => true,
-    };
-    if (cond) {
+    const cond = try interpreter.eval(args[0]);
+    if (cond != .boolean) return error.IfInvalidConditiona;
+    if (cond.boolean) {
         return try interpreter.eval(args[1]);
     } else {
         if (args.len > 3) {
@@ -154,14 +152,14 @@ fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
 }
 
 fn @"while"(interpreter: *Interpreter, args: []Expr) !Expr {
-    if (args.len < 2) return error.IfInvalidArguments;
+    if (args.len < 2) return error.WhileInvalidArguments;
     while (switch ((try interpreter.eval(args[0]))) {
-        .list => |cond| cond.items.len > 0,
-        else => true,
+        .boolean => |boolean| boolean,
+        else => return error.WhileInvalidConditional,
     }) {
         for (args[1..]) |branch| _ = try interpreter.eval(branch);
     }
-    return Expr{ .boolean = false };
+    return Expr{ .nil = undefined };
 }
 
 fn list(interpreter: *Interpreter, args: []Expr) !Expr {
