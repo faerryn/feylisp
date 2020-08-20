@@ -4,6 +4,8 @@ const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
 
 const parse = @import("parse.zig");
+const Tokenizer = parse.Tokenizer;
+const Parser = parse.Parser;
 
 const interpret = @import("interpret.zig");
 const Expr = interpret.Expr;
@@ -31,7 +33,14 @@ pub fn main() !void {
             var source = std.ArrayList(u8).init(allocator);
             defer source.deinit();
             try file.reader().readAllArrayList(&source, len);
-            try evalSource(allocator, &interpreter, source.items, false);
+            var tokenizer = Tokenizer.init(source.items);
+            var tokens = std.ArrayList(parse.Token).init(allocator);
+            defer tokens.deinit();
+            while (try tokenizer.next()) |token| try tokens.append(token);
+            var parser = Parser.init(&interpreter, source.items, tokens.items);
+            while (try parser.next()) |expr| {
+                if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
+            }
         }
     } else { // REPL
         repl_loop: while (true) {
@@ -72,23 +81,18 @@ pub fn main() !void {
                     else => {},
                 }
             }
-            try evalSource(allocator, &interpreter, source.items, true);
-        }
-    }
-}
-
-pub fn evalSource(allocator: *std.mem.Allocator, interpreter: *Interpreter, source: []const u8, in_repl: bool) !void {
-    var tokenizer = parse.Tokenizer.init(source);
-    var tokens = std.ArrayList(parse.Token).init(allocator);
-    defer tokens.deinit();
-    while (try tokenizer.next()) |token| try tokens.append(token);
-
-    var parser = parse.Parser.init(interpreter, source, tokens.items);
-    while (try parser.next()) |expr| {
-        if (interpreter.eval(expr)) |result| {
-            if (in_repl) try stdout.print("{}\n", .{result});
-        } else |err| {
-            try stderr.print("{}\n", .{err});
+            var tokenizer = Tokenizer.init(source.items);
+            var tokens = std.ArrayList(parse.Token).init(allocator);
+            defer tokens.deinit();
+            while (try tokenizer.next()) |token| try tokens.append(token);
+            var parser = Parser.init(&interpreter, source.items, tokens.items);
+            while (try parser.next()) |expr| {
+                if (interpreter.eval(expr)) |result| {
+                    try stdout.print("{}\n", .{result});
+                } else |err| {
+                    try stderr.print("{}\n", .{err});
+                }
+            }
         }
     }
 }

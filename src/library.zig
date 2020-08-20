@@ -1,5 +1,10 @@
 const std = @import("std");
 const stdout = std.io.getStdOut().writer();
+const stderr = std.io.getStdErr().writer();
+
+const parse = @import("parse.zig");
+const Tokenizer = parse.Tokenizer;
+const Parser = parse.Parser;
 
 const interpret = @import("interpret.zig");
 const Expr = interpret.Expr;
@@ -31,6 +36,7 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     try core.scope.put("len", Expr{ .native_func = @ptrToInt(len) });
     try core.scope.put("at", Expr{ .native_func = @ptrToInt(at) });
     try core.scope.put("push", Expr{ .native_func = @ptrToInt(push) });
+    try core.scope.put("load", Expr{ .native_func = @ptrToInt(load) });
     return core;
 }
 
@@ -189,4 +195,27 @@ fn push(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args[0] != .list) return error.PushNotAList;
     for (args[1..]) |branch| try args[0].list.append(branch);
     return args[args.len - 1];
+}
+
+fn load(interpreter: *Interpreter, args: []Expr) !Expr {
+    if (args.len < 1) return error.LoadInvalidArguments;
+    for (args) |branch| {
+        if (branch != .string) return error.LoadInvalidPath;
+        var file = try std.fs.cwd().openFile(branch.string.items, .{});
+        defer file.close();
+        const eof = try file.getEndPos();
+        var source = std.ArrayList(u8).init(interpreter.allocator);
+        defer source.deinit();
+        try file.reader().readAllArrayList(&source, eof);
+        var tokenizer = Tokenizer.init(source.items);
+        var tokens = std.ArrayList(parse.Token).init(interpreter.allocator);
+        defer tokens.deinit();
+        while (try tokenizer.next()) |token| try tokens.append(token);
+
+        var parser = Parser.init(interpreter, source.items, tokens.items);
+        while (try parser.next()) |expr| {
+            if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
+        }
+    }
+    return Expr{ .nil = undefined };
 }
