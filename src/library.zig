@@ -36,7 +36,9 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     try core.scope.put("len", Expr{ .native_func = @ptrToInt(len) });
     try core.scope.put("at", Expr{ .native_func = @ptrToInt(at) });
     try core.scope.put("push", Expr{ .native_func = @ptrToInt(push) });
+    try core.scope.put("pop", Expr{ .native_func = @ptrToInt(pop) });
     try core.scope.put("load", Expr{ .native_func = @ptrToInt(load) });
+    try core.scope.put("clone", Expr{ .native_func = @ptrToInt(clone) });
     return core;
 }
 
@@ -197,6 +199,12 @@ fn push(interpreter: *Interpreter, args: []Expr) !Expr {
     return args[args.len - 1];
 }
 
+fn pop(interpreter: *Interpreter, args: []Expr) !Expr {
+    if (args.len != 1) return error.PopInvalidArguments;
+    if (args[0] != .list) return error.PopNotAList;
+    return args[0].list.pop();
+}
+
 fn load(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len < 1) return error.LoadInvalidArguments;
     for (args) |branch| {
@@ -218,4 +226,9 @@ fn load(interpreter: *Interpreter, args: []Expr) !Expr {
         }
     }
     return Expr{ .nil = undefined };
+}
+
+fn clone(interpreter: *Interpreter, args: []Expr) !Expr {
+    if (args.len != 1) return error.CloneInvalidArguments;
+    return interpreter.clone(args[0], false);
 }
