@@ -160,7 +160,7 @@ pub const Interpreter = struct {
                             else => return error.InterpreterFuncInvalidParameter,
                         };
                         for (func.body.items[0 .. func.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return try self.clone(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]));
+                        return try self.clone(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]), true);
                     },
                     .macro => |macro| {
                         if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
@@ -172,7 +172,7 @@ pub const Interpreter = struct {
                             else => return error.InterpreterMacroInvalidParameter,
                         };
                         for (macro.body.items[0 .. macro.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return try self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
+                        return try self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]), true);
                     },
                     else => return error.InterpreterNoSuchFunction,
                 }
@@ -198,44 +198,65 @@ pub const Interpreter = struct {
         return expr;
     }
 
-    pub fn clone(self: *Interpreter, expr: Expr) anyerror!Expr {
+    pub fn clone(self: *Interpreter, expr: Expr, steal: bool) anyerror!Expr {
         switch (expr) {
             .number, .boolean, .nil, .native_func, .native_macro => return expr,
-            .string => |string| {
+            .string, .identifier => |string| {
                 var copy = try self.allocator.create(std.ArrayList(u8));
                 errdefer self.allocator.destroy(copy);
-                copy.* = std.ArrayList(u8).init(self.allocator);
-                errdefer copy.deinit();
-                try copy.appendSlice(string.items);
-                return self.store(Expr{ .string = copy });
-            },
-            .identifier => |identifier| {
-                var copy = try self.allocator.create(std.ArrayList(u8));
-                errdefer self.allocator.destroy(copy);
-                copy.* = std.ArrayList(u8).init(self.allocator);
-                errdefer copy.deinit();
-                try copy.appendSlice(identifier.items);
-                return self.store(Expr{ .identifier = copy });
+                if (steal) {
+                    copy.* = std.ArrayList(u8).fromOwnedSlice(string.allocator, string.toOwnedSlice());
+                } else {
+                    copy.* = std.ArrayList(u8).init(self.allocator);
+                    errdefer copy.deinit();
+                    try copy.appendSlice(string.items);
+                }
+                switch (expr) {
+                    .string => return self.store(Expr{ .string = copy }),
+                    .identifier => return self.store(Expr{ .identifier = copy }),
+                    else => unreachable,
+                }
             },
             .list => |list| {
                 var copy = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(copy);
-                copy.* = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
-                errdefer copy.deinit();
-                for (list.items) |branch| try copy.append(try self.clone(branch));
+
+                if (steal) {
+                    copy.* = std.ArrayList(Expr).fromOwnedSlice(list.allocator, list.toOwnedSlice());
+                    for (copy.items) |branch| _ = try self.clone(branch, true);
+                } else {
+                    copy.* = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
+                    errdefer copy.deinit();
+                    for (list.items) |branch| try copy.append(try self.clone(branch, false));
+                }
+
                 return self.store(Expr{ .list = copy });
             },
             .func, .macro => |call| {
                 var params = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(params);
-                params.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
-                errdefer params.deinit();
-                for (call.params.items) |branch| try params.append(try self.clone(branch));
+
+                if (steal) {
+                    params.* = std.ArrayList(Expr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
+                    for (params.items) |branch| _ = try self.clone(branch, true);
+                } else {
+                    params.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
+                    errdefer params.deinit();
+                    for (call.params.items) |branch| try params.append(try self.clone(branch, false));
+                }
+
                 var body = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(body);
-                body.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
-                errdefer body.deinit();
-                for (call.body.items) |branch| try body.append(try self.clone(branch));
+
+                if (steal) {
+                    body.* = std.ArrayList(Expr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
+                    for (body.items) |branch| _ = try self.clone(branch, true);
+                } else {
+                    body.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
+                    errdefer body.deinit();
+                    for (call.body.items) |branch| try body.append(try self.clone(branch, false));
+                }
+
                 const copy = Call{ .params = params, .body = body };
                 switch (expr) {
                     .func => return self.store(Expr{ .func = copy }),
