@@ -1,5 +1,7 @@
 const std = @import("std");
 const interpret = @import("interpret.zig");
+const Expr = interpret.Expr;
+const Interpreter = interpret.Interpreter;
 
 pub const Token = struct {
     id: Id,
@@ -183,12 +185,12 @@ pub const Tokenizer = struct {
 };
 
 pub const Parser = struct {
-    interpreter: *interpret.Interpreter,
+    interpreter: *Interpreter,
     source: []const u8,
     tokens: []Token,
     index: usize,
 
-    pub fn init(interpreter: *interpret.Interpreter, source: []const u8, tokens: []Token) Parser {
+    pub fn init(interpreter: *Interpreter, source: []const u8, tokens: []Token) Parser {
         return Parser{
             .interpreter = interpreter,
             .source = source,
@@ -197,20 +199,24 @@ pub const Parser = struct {
         };
     }
 
-    pub fn next(self: *Parser) anyerror!?*interpret.Expr {
+    pub fn next(self: *Parser) anyerror!?Expr {
         if (self.index >= self.tokens.len) return null;
         const t = self.tokens[self.index];
         self.index += 1;
-        const expr = switch (t.id) {
+        switch (t.id) {
             .line_comment => return try self.next(),
-            .identifier => blk: {
-                var list = std.ArrayList(u8).init(self.interpreter.allocator);
+            .identifier => {
+                var list = try self.interpreter.allocator.create(std.ArrayList(u8));
+                errdefer self.interpreter.allocator.destroy(list);
+                list.* = std.ArrayList(u8).init(self.interpreter.allocator);
                 errdefer list.deinit();
                 try list.appendSlice(self.source[t.start..t.end]);
-                break :blk interpret.Expr{ .identifier = list };
+                return try self.interpreter.store(Expr{ .identifier = list });
             },
-            .string_literal => blk: {
-                var list = try std.ArrayList(u8).initCapacity(self.interpreter.allocator, (t.end - t.start - 2) / 2);
+            .string_literal => {
+                var list = try self.interpreter.allocator.create(std.ArrayList(u8));
+                errdefer self.interpreter.allocator.destroy(list);
+                list.* = try std.ArrayList(u8).initCapacity(self.interpreter.allocator, (t.end - t.start - 2) / 2);
                 errdefer list.deinit();
                 var backslash = false;
                 for (self.source[t.start + 1 .. t.end - 1]) |string_c| {
@@ -229,14 +235,16 @@ pub const Parser = struct {
                         }
                     }
                 }
-                break :blk interpret.Expr{ .string = list };
+                return try self.interpreter.store(Expr{ .string = list });
             },
-            .integer_literal, .float_literal => blk: {
+            .integer_literal, .float_literal => {
                 const num = try std.fmt.parseFloat(f64, self.source[t.start..t.end]);
-                break :blk interpret.Expr{ .number = num };
+                return Expr{ .number = num };
             },
-            .open_paren => blk: {
-                var list = std.ArrayList(*interpret.Expr).init(self.interpreter.allocator);
+            .open_paren => {
+                var list = try self.interpreter.allocator.create(std.ArrayList(Expr));
+                errdefer self.interpreter.allocator.destroy(list);
+                list.* = std.ArrayList(Expr).init(self.interpreter.allocator);
                 errdefer list.deinit();
                 errdefer for (list.items) |branch| branch.deinit();
                 while (self.tokens[self.index].id != .close_paren) {
@@ -247,10 +255,9 @@ pub const Parser = struct {
                     }
                 }
                 self.index += 1;
-                break :blk interpret.Expr{ .list = list };
+                return try self.interpreter.store(Expr{ .list = list });
             },
             .close_paren => return error.ParserOverclosedParen,
-        };
-        return try self.interpreter.store(expr);
+        }
     }
 };
