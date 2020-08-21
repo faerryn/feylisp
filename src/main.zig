@@ -42,56 +42,55 @@ pub fn main() !void {
                 if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
             }
         }
-    } else { // REPL
-        repl_loop: while (true) {
-            const PROMPT = " >> ";
-            _ = try stdout.write(PROMPT);
+    }
+    repl_loop: while (true) {
+        const PROMPT = " >> ";
+        _ = try stdout.write(PROMPT);
 
-            var source = std.ArrayList(u8).init(allocator);
-            defer source.deinit();
+        var source = std.ArrayList(u8).init(allocator);
+        defer source.deinit();
 
-            var parens: usize = 0;
-            while (true) {
-                const c = stdin.readByte() catch |err| switch (err) {
-                    error.EndOfStream => break :repl_loop,
-                    else => return err,
-                };
-                try source.append(c);
-                switch (c) {
-                    '(' => parens += 1,
-                    ')' => {
-                        if (parens > 0) {
-                            parens -= 1;
-                        } else {
-                            try stderr.print("{}\n", .{error.REPLOverclosedParen});
-                            while (stdin.readByte() catch |err| switch (err) {
-                                error.EndOfStream => break :repl_loop,
-                                else => return err,
-                            } != '\n') {}
-                            continue :repl_loop;
-                        }
-                    },
-                    '\n' => {
-                        if (parens > 0) {
-                            _ = try stdout.write(" " ** PROMPT.len);
-                        } else {
-                            break;
-                        }
-                    },
-                    else => {},
-                }
+        var parens: usize = 0;
+        while (true) {
+            const c = stdin.readByte() catch |err| switch (err) {
+                error.EndOfStream => break :repl_loop,
+                else => return err,
+            };
+            try source.append(c);
+            switch (c) {
+                '(' => parens += 1,
+                ')' => {
+                    if (parens > 0) {
+                        parens -= 1;
+                    } else {
+                        try stderr.print("{}\n", .{error.REPLOverclosedParen});
+                        while (stdin.readByte() catch |err| switch (err) {
+                            error.EndOfStream => break :repl_loop,
+                            else => return err,
+                        } != '\n') {}
+                        continue :repl_loop;
+                    }
+                },
+                '\n' => {
+                    if (parens > 0) {
+                        _ = try stdout.write(" " ** PROMPT.len);
+                    } else {
+                        break;
+                    }
+                },
+                else => {},
             }
-            var tokenizer = Tokenizer.init(source.items);
-            var tokens = std.ArrayList(parse.Token).init(allocator);
-            defer tokens.deinit();
-            while (try tokenizer.next()) |token| try tokens.append(token);
-            var parser = Parser.init(&interpreter, source.items, tokens.items);
-            while (try parser.next()) |expr| {
-                if (interpreter.eval(expr)) |result| {
-                    try stdout.print("{}\n", .{result});
-                } else |err| {
-                    try stderr.print("{}\n", .{err});
-                }
+        }
+        var tokenizer = Tokenizer.init(source.items);
+        var tokens = std.ArrayList(parse.Token).init(allocator);
+        defer tokens.deinit();
+        while (try tokenizer.next()) |token| try tokens.append(token);
+        var parser = Parser.init(&interpreter, source.items, tokens.items);
+        while (try parser.next()) |expr| {
+            if (interpreter.eval(expr)) |result| {
+                try stdout.print("{}\n", .{result});
+            } else |err| {
+                try stderr.print("{}\n", .{err});
             }
         }
     }

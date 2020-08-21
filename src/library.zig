@@ -37,7 +37,6 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     try core.scope.put("at", Expr{ .native_func = @ptrToInt(at) });
     try core.scope.put("push", Expr{ .native_func = @ptrToInt(push) });
     try core.scope.put("pop", Expr{ .native_func = @ptrToInt(pop) });
-    try core.scope.put("load", Expr{ .native_func = @ptrToInt(load) });
     try core.scope.put("clone", Expr{ .native_func = @ptrToInt(clone) });
     return core;
 }
@@ -203,29 +202,6 @@ fn pop(interpreter: *Interpreter, args: []Expr) !Expr {
     if (args.len != 1) return error.PopInvalidArguments;
     if (args[0] != .list) return error.PopNotAList;
     return args[0].list.pop();
-}
-
-fn load(interpreter: *Interpreter, args: []Expr) !Expr {
-    if (args.len < 1) return error.LoadInvalidArguments;
-    for (args) |branch| {
-        if (branch != .string) return error.LoadInvalidPath;
-        var file = try std.fs.cwd().openFile(branch.string.items, .{});
-        defer file.close();
-        const eof = try file.getEndPos();
-        var source = std.ArrayList(u8).init(interpreter.allocator);
-        defer source.deinit();
-        try file.reader().readAllArrayList(&source, eof);
-        var tokenizer = Tokenizer.init(source.items);
-        var tokens = std.ArrayList(parse.Token).init(interpreter.allocator);
-        defer tokens.deinit();
-        while (try tokenizer.next()) |token| try tokens.append(token);
-
-        var parser = Parser.init(interpreter, source.items, tokens.items);
-        while (try parser.next()) |expr| {
-            if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
-        }
-    }
-    return Expr{ .nil = undefined };
 }
 
 fn clone(interpreter: *Interpreter, args: []Expr) !Expr {
