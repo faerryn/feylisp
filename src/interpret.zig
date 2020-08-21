@@ -220,43 +220,46 @@ pub const Interpreter = struct {
             .list => |list| {
                 var copy = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(copy);
-
                 if (steal) {
                     copy.* = std.ArrayList(Expr).fromOwnedSlice(list.allocator, list.toOwnedSlice());
-                    for (copy.items) |branch| _ = try self.clone(branch, true);
+                    var i: usize = 0;
+                    while (i < copy.items.len) : (i += 1) {
+                        copy.items[i] = try self.clone(copy.items[i], true);
+                    }
                 } else {
                     copy.* = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
                     errdefer copy.deinit();
                     for (list.items) |branch| try copy.append(try self.clone(branch, false));
                 }
-
                 return self.store(Expr{ .list = copy });
             },
             .func, .macro => |call| {
                 var params = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(params);
-
                 if (steal) {
                     params.* = std.ArrayList(Expr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
-                    for (params.items) |branch| _ = try self.clone(branch, true);
+                    var i: usize = 0;
+                    while (i < params.items.len) : (i += 1) {
+                        params.items[i] = try self.clone(params.items[i], true);
+                    }
                 } else {
                     params.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
                     errdefer params.deinit();
                     for (call.params.items) |branch| try params.append(try self.clone(branch, false));
                 }
-
                 var body = try self.allocator.create(std.ArrayList(Expr));
                 errdefer self.allocator.destroy(body);
-
                 if (steal) {
                     body.* = std.ArrayList(Expr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
-                    for (body.items) |branch| _ = try self.clone(branch, true);
+                    var i: usize = 0;
+                    while (i < body.items.len) : (i += 1) {
+                        body.items[i] = try self.clone(body.items[i], true);
+                    }
                 } else {
                     body.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
                     errdefer body.deinit();
                     for (call.body.items) |branch| try body.append(try self.clone(branch, false));
                 }
-
                 const copy = Call{ .params = params, .body = body };
                 switch (expr) {
                     .func => return self.store(Expr{ .func = copy }),
