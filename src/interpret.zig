@@ -6,7 +6,7 @@ pub const Call = struct {
     body: *std.ArrayList(Expr),
 };
 
-pub const Expr = union(ExprTag) {
+pub const Expr = union(enum) {
     list: *std.ArrayList(Expr),
     identifier: *std.ArrayList(u8),
     string: *std.ArrayList(u8),
@@ -89,19 +89,6 @@ pub const Expr = union(ExprTag) {
             .native_macro => |native_call| try writer.print("macro@{}", .{native_call}),
         }
     }
-};
-
-pub const ExprTag = enum {
-    list,
-    identifier,
-    string,
-    number,
-    t,
-    nil,
-    func,
-    macro,
-    native_func,
-    native_macro,
 };
 
 pub const Interpreter = struct {
