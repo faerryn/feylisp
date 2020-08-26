@@ -14,8 +14,8 @@ const Interpreter = interpret.Interpreter;
 pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     var core = Interpreter.init(allocator, null);
     errdefer core.deinit();
-    try core.scope.put("nil", Expr{ .nil = undefined });
-    try core.scope.put("t", Expr{ .t = undefined });
+    try core.scope.put("nil", Expr{ .nil = {} });
+    try core.scope.put("t", Expr{ .t = {} });
     try core.scope.put("+", Expr{ .native_func = @ptrToInt(OperationAccumulator(.add).accumulate) });
     try core.scope.put("-", Expr{ .native_func = @ptrToInt(OperationAccumulator(.sub).accumulate) });
     try core.scope.put("*", Expr{ .native_func = @ptrToInt(OperationAccumulator(.mul).accumulate) });
@@ -81,10 +81,10 @@ fn ComparisonAccumulator(comp: Comparison) type {
                     .gteq => first >= number,
                     .lt => first < number,
                     .lteq => first <= number,
-                }) return Expr{ .nil = undefined },
+                }) return Expr{ .nil = {} },
                 else => return error.ComparisonNotANumber,
             };
-            return Expr{ .t = undefined };
+            return Expr{ .t = {} };
         }
     };
 }
@@ -164,7 +164,7 @@ fn @"while"(interpreter: *Interpreter, args: []Expr) !Expr {
     while ((try interpreter.eval(args[0])) != .nil) {
         for (args[1..]) |branch| _ = try interpreter.eval(branch);
     }
-    return Expr{ .nil = undefined };
+    return Expr{ .nil = {} };
 }
 
 fn list(interpreter: *Interpreter, args: []Expr) !Expr {
