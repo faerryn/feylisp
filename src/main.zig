@@ -25,7 +25,7 @@ pub fn main() !void {
 
     var args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-    if (args.len > 1) { // Load file
+    if (args.len > 1) {
         for (args[1..]) |path| {
             var file = try std.fs.cwd().openFile(path, .{});
             defer file.close();
