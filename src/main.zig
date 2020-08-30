@@ -25,22 +25,20 @@ pub fn main() !void {
 
     var args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-    if (args.len > 1) {
-        for (args[1..]) |path| {
-            var file = try std.fs.cwd().openFile(path, .{});
-            defer file.close();
-            const len = try file.getEndPos();
-            var source = std.ArrayList(u8).init(allocator);
-            defer source.deinit();
-            try file.reader().readAllArrayList(&source, len);
-            var tokenizer = Tokenizer.init(source.items);
-            var tokens = std.ArrayList(parse.Token).init(allocator);
-            defer tokens.deinit();
-            while (try tokenizer.next()) |token| try tokens.append(token);
-            var parser = Parser.init(&interpreter, source.items, tokens.items);
-            while (try parser.next()) |expr| {
-                if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
-            }
+    for (args[1..]) |path| {
+        var file = try std.fs.cwd().openFile(path, .{});
+        defer file.close();
+        const len = try file.getEndPos();
+        var source = std.ArrayList(u8).init(allocator);
+        defer source.deinit();
+        try file.reader().readAllArrayList(&source, len);
+        var tokenizer = Tokenizer.init(source.items);
+        var tokens = std.ArrayList(parse.Token).init(allocator);
+        defer tokens.deinit();
+        while (try tokenizer.next()) |token| try tokens.append(token);
+        var parser = Parser.init(&interpreter, source.items, tokens.items);
+        while (try parser.next()) |expr| {
+            if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
         }
     }
     repl_loop: while (true) {
@@ -64,10 +62,13 @@ pub fn main() !void {
                         parens -= 1;
                     } else {
                         try stderr.print("{}\n", .{error.REPLOverclosedParen});
-                        while (stdin.readByte() catch |err| switch (err) {
-                            error.EndOfStream => break :repl_loop,
-                            else => return err,
-                        } != '\n') {}
+                        var char: u8 = 0;
+                        while (char != '\n') {
+                            char = stdin.readByte() catch |err| switch (err) {
+                                error.EndOfStream => break :repl_loop,
+                                else => return err,
+                            };
+                        }
                         continue :repl_loop;
                     }
                 },
