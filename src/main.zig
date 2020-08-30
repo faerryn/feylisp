@@ -62,13 +62,6 @@ pub fn main() !void {
                         parens -= 1;
                     } else {
                         try stderr.print("{}\n", .{error.REPLOverclosedParen});
-                        var char: u8 = 0;
-                        while (char != '\n') {
-                            char = stdin.readByte() catch |err| switch (err) {
-                                error.EndOfStream => break :repl_loop,
-                                else => return err,
-                            };
-                        }
                         continue :repl_loop;
                     }
                 },
@@ -82,6 +75,7 @@ pub fn main() !void {
                 else => {},
             }
         }
+
         var tokenizer = Tokenizer.init(source.items);
         var tokens = std.ArrayList(parse.Token).init(allocator);
         defer tokens.deinit();
