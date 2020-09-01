@@ -16,16 +16,16 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     errdefer core.deinit();
     try core.scope.put("nil", Expr{ .nil = {} });
     try core.scope.put("t", Expr{ .t = {} });
-    try core.scope.put("+", Expr{ .native_func = @ptrToInt(OperationAccumulator(.add).accumulate) });
-    try core.scope.put("-", Expr{ .native_func = @ptrToInt(OperationAccumulator(.sub).accumulate) });
-    try core.scope.put("*", Expr{ .native_func = @ptrToInt(OperationAccumulator(.mul).accumulate) });
-    try core.scope.put("/", Expr{ .native_func = @ptrToInt(OperationAccumulator(.div).accumulate) });
-    try core.scope.put("=", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.eq).accumulate) });
-    try core.scope.put("!=", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.neq).accumulate) });
-    try core.scope.put("<", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lt).accumulate) });
-    try core.scope.put("<=", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.lteq).accumulate) });
-    try core.scope.put(">", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gt).accumulate) });
-    try core.scope.put(">=", Expr{ .native_func = @ptrToInt(ComparisonAccumulator(.gteq).accumulate) });
+    try core.scope.put("+", Expr{ .native_func = @ptrToInt(Operation(.add).accumulate) });
+    try core.scope.put("-", Expr{ .native_func = @ptrToInt(Operation(.sub).accumulate) });
+    try core.scope.put("*", Expr{ .native_func = @ptrToInt(Operation(.mul).accumulate) });
+    try core.scope.put("/", Expr{ .native_func = @ptrToInt(Operation(.div).accumulate) });
+    try core.scope.put("=", Expr{ .native_func = @ptrToInt(Comparison(.eq).accumulate) });
+    try core.scope.put("!=", Expr{ .native_func = @ptrToInt(Comparison(.neq).accumulate) });
+    try core.scope.put("<", Expr{ .native_func = @ptrToInt(Comparison(.lt).accumulate) });
+    try core.scope.put("<=", Expr{ .native_func = @ptrToInt(Comparison(.lteq).accumulate) });
+    try core.scope.put(">", Expr{ .native_func = @ptrToInt(Comparison(.gt).accumulate) });
+    try core.scope.put(">=", Expr{ .native_func = @ptrToInt(Comparison(.gteq).accumulate) });
     try core.scope.put("print", Expr{ .native_func = @ptrToInt(print) });
     try core.scope.put("let", Expr{ .native_macro = @ptrToInt(let) });
     try core.scope.put("func", Expr{ .native_macro = @ptrToInt(Callable(.func).call) });
@@ -41,32 +41,54 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     return core;
 }
 
-const Operation = enum { add, sub, mul, div };
-fn OperationAccumulator(op: Operation) type {
-    return struct {
-        fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
-            var acc: isize = switch (op) {
-                .add, .sub => 0,
-                .mul, .div => 1,
-            };
-            for (args) |arg| {
-                switch (arg) {
-                    .number => |num| switch (op) {
-                        .add => acc += num,
-                        .sub => acc -= num,
-                        .mul => acc *= num,
-                        .div => acc = @divTrunc(acc, num),
-                    },
-                    else => return error.AddNotANumber,
+const OperationType = enum { add, sub, mul, div };
+fn Operation(op: OperationType) type {
+    switch (op) {
+        .add, .mul => return struct {
+            fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
+                var acc: isize = switch (op) {
+                    .add => 0,
+                    .mul => 1,
+                    else => unreachable,
+                };
+                for (args) |arg| {
+                    switch (arg) {
+                        .number => |num| switch (op) {
+                            .add => acc += num,
+                            .mul => acc *= num,
+                            else => unreachable,
+                        },
+                        else => return error.OperationNotANumber,
+                    }
                 }
+                return Expr{ .number = acc };
             }
-            return Expr{ .number = acc };
-        }
-    };
+        },
+        .sub, .div => return struct {
+            fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
+                if (args.len != 2) return error.OperationInvalidArguments;
+                const first = switch (args[0]) {
+                    .number => |number| number,
+                    else => return error.OperationNotANumber,
+                };
+                const second = switch (args[1]) {
+                    .number => |number| number,
+                    else => return error.OperationNotANumber,
+                };
+                return Expr{
+                    .number = switch (op) {
+                        .sub => first - second,
+                        .div => @divTrunc(first, second),
+                        else => unreachable,
+                    },
+                };
+            }
+        },
+    }
 }
 
-const Comparison = enum { eq, neq, gt, gteq, lt, lteq };
-fn ComparisonAccumulator(comp: Comparison) type {
+const ComparisonType = enum { eq, neq, gt, gteq, lt, lteq };
+fn Comparison(comp: ComparisonType) type {
     return struct {
         fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
             const first = switch (args[0]) {
