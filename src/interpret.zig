@@ -2,8 +2,8 @@ const std = @import("std");
 
 pub const NativeCall = fn (*Interpreter, []Expr) anyerror!Expr;
 pub const Call = struct {
-    params: *std.ArrayList(Expr),
-    body: *std.ArrayList(Expr),
+    params: std.ArrayList(Expr),
+    body: std.ArrayList(Expr),
 };
 
 pub const Expr = union(enum) {
@@ -13,8 +13,8 @@ pub const Expr = union(enum) {
     number: isize,
     t,
     nil,
-    func: Call,
-    macro: Call,
+    func: *Call,
+    macro: *Call,
     native_func: usize,
     native_macro: usize,
 
@@ -115,8 +115,7 @@ pub const Interpreter = struct {
                 .list => |list| self.allocator.destroy(list),
                 .identifier, .string => |list| self.allocator.destroy(list),
                 .func, .macro => |call| {
-                    self.allocator.destroy(call.params);
-                    self.allocator.destroy(call.body);
+                    self.allocator.destroy(call);
                 },
             }
         }
@@ -221,33 +220,30 @@ pub const Interpreter = struct {
                 return self.store(Expr{ .list = copy });
             },
             .func, .macro => |call| {
-                var params = try self.allocator.create(std.ArrayList(Expr));
-                errdefer self.allocator.destroy(params);
+                var copy = try self.allocator.create(Call);
+                errdefer self.allocator.destroy(copy);
                 if (steal) {
-                    params.* = std.ArrayList(Expr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
+                    copy.params = std.ArrayList(Expr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
                     var i: usize = 0;
-                    while (i < params.items.len) : (i += 1) {
-                        params.items[i] = try self.clone(params.items[i], true);
+                    while (i < copy.params.items.len) : (i += 1) {
+                        copy.params.items[i] = try self.clone(copy.params.items[i], true);
                     }
                 } else {
-                    params.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
-                    errdefer params.deinit();
-                    for (call.params.items) |branch| try params.append(try self.clone(branch, false));
+                    copy.params = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
+                    errdefer copy.params.deinit();
+                    for (call.params.items) |branch| try copy.params.append(try self.clone(branch, false));
                 }
-                var body = try self.allocator.create(std.ArrayList(Expr));
-                errdefer self.allocator.destroy(body);
                 if (steal) {
-                    body.* = std.ArrayList(Expr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
+                    copy.body = std.ArrayList(Expr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
                     var i: usize = 0;
-                    while (i < body.items.len) : (i += 1) {
-                        body.items[i] = try self.clone(body.items[i], true);
+                    while (i < copy.body.items.len) : (i += 1) {
+                        copy.body.items[i] = try self.clone(copy.body.items[i], true);
                     }
                 } else {
-                    body.* = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
-                    errdefer body.deinit();
-                    for (call.body.items) |branch| try body.append(try self.clone(branch, false));
+                    copy.body = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
+                    errdefer copy.body.deinit();
+                    for (call.body.items) |branch| try copy.body.append(try self.clone(branch, false));
                 }
-                const copy = Call{ .params = params, .body = body };
                 switch (expr) {
                     .func => return self.store(Expr{ .func = copy }),
                     .macro => return self.store(Expr{ .macro = copy }),

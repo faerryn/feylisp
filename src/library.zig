@@ -143,23 +143,20 @@ fn Callable(callable_type: CallableType) type {
         fn call(interpreter: *Interpreter, args: []Expr) !Expr {
             if (args.len < 2) return error.FuncInvalidArguments;
             if (args[0] != .list) return error.FuncNoParameters;
-            var params = try interpreter.allocator.create(std.ArrayList(Expr));
-            errdefer interpreter.allocator.destroy(params);
-            params.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
-            errdefer params.deinit();
+            var callable = try interpreter.allocator.create(Call);
+            errdefer interpreter.allocator.destroy(callable);
+            callable.params = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
+            errdefer callable.params.deinit();
             for (args[0].list.items) |param| {
                 if (param == .identifier) {
-                    try params.append(param);
+                    try callable.params.append(param);
                 } else {
                     return error.FuncInvalidParameter;
                 }
             }
-            var body = try interpreter.allocator.create(std.ArrayList(Expr));
-            errdefer interpreter.allocator.destroy(body);
-            body.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
-            errdefer body.deinit();
-            for (args[1..]) |expr| try body.append(expr);
-            const callable = Call{ .params = params, .body = body };
+            callable.body = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
+            errdefer callable.body.deinit();
+            for (args[1..]) |expr| try callable.body.append(expr);
             switch (callable_type) {
                 .func => return try interpreter.store(Expr{ .func = callable }),
                 .macro => return try interpreter.store(Expr{ .macro = callable }),
