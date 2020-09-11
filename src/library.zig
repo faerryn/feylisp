@@ -9,6 +9,7 @@ const Parser = parse.Parser;
 const interpret = @import("interpret.zig");
 const Expr = interpret.Expr;
 const Call = interpret.Call;
+const NativeCall = interpret.NativeCall;
 const Interpreter = interpret.Interpreter;
 
 pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
@@ -16,16 +17,16 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
     errdefer core.deinit();
     try core.scope.put("nil", Expr{ .nil = {} });
     try core.scope.put("t", Expr{ .t = {} });
-    try core.scope.put("+", Expr{ .native_func = @ptrToInt(Operation(.add).accumulate) });
-    try core.scope.put("-", Expr{ .native_func = @ptrToInt(Operation(.sub).accumulate) });
-    try core.scope.put("*", Expr{ .native_func = @ptrToInt(Operation(.mul).accumulate) });
-    try core.scope.put("/", Expr{ .native_func = @ptrToInt(Operation(.div).accumulate) });
-    try core.scope.put("=", Expr{ .native_func = @ptrToInt(Comparison(.eq).accumulate) });
-    try core.scope.put("!=", Expr{ .native_func = @ptrToInt(Comparison(.neq).accumulate) });
-    try core.scope.put("<", Expr{ .native_func = @ptrToInt(Comparison(.lt).accumulate) });
-    try core.scope.put("<=", Expr{ .native_func = @ptrToInt(Comparison(.lteq).accumulate) });
-    try core.scope.put(">", Expr{ .native_func = @ptrToInt(Comparison(.gt).accumulate) });
-    try core.scope.put(">=", Expr{ .native_func = @ptrToInt(Comparison(.gteq).accumulate) });
+    try core.scope.put("+", Expr{ .native_func = @ptrToInt(Operation(.add)) });
+    try core.scope.put("-", Expr{ .native_func = @ptrToInt(Operation(.sub)) });
+    try core.scope.put("*", Expr{ .native_func = @ptrToInt(Operation(.mul)) });
+    try core.scope.put("/", Expr{ .native_func = @ptrToInt(Operation(.div)) });
+    try core.scope.put("=", Expr{ .native_func = @ptrToInt(Comparison(.eq)) });
+    try core.scope.put("!=", Expr{ .native_func = @ptrToInt(Comparison(.neq)) });
+    try core.scope.put("<", Expr{ .native_func = @ptrToInt(Comparison(.lt)) });
+    try core.scope.put("<=", Expr{ .native_func = @ptrToInt(Comparison(.lteq)) });
+    try core.scope.put(">", Expr{ .native_func = @ptrToInt(Comparison(.gt)) });
+    try core.scope.put(">=", Expr{ .native_func = @ptrToInt(Comparison(.gteq)) });
     try core.scope.put("print", Expr{ .native_func = @ptrToInt(print) });
     try core.scope.put("let", Expr{ .native_macro = @ptrToInt(let) });
     try core.scope.put("func", Expr{ .native_macro = @ptrToInt(Callable(.func).call) });
@@ -42,10 +43,10 @@ pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
 }
 
 const OperationType = enum { add, sub, mul, div };
-fn Operation(op: OperationType) type {
-    switch (op) {
-        .add, .mul => return struct {
-            fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
+fn Operation(comptime op: OperationType) NativeCall {
+    const impl = switch (op) {
+        .add, .mul => struct {
+            fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
                 var acc: isize = switch (op) {
                     .add => 0,
                     .mul => 1,
@@ -64,8 +65,8 @@ fn Operation(op: OperationType) type {
                 return Expr{ .number = acc };
             }
         },
-        .sub, .div => return struct {
-            fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
+        .sub, .div => struct {
+            fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
                 if (args.len != 2) return error.OperationInvalidArguments;
                 const first = switch (args[0]) {
                     .number => |number| number,
@@ -84,13 +85,14 @@ fn Operation(op: OperationType) type {
                 };
             }
         },
-    }
+    };
+    return impl.inner;
 }
 
 const ComparisonType = enum { eq, neq, gt, gteq, lt, lteq };
-fn Comparison(comp: ComparisonType) type {
-    return struct {
-        fn accumulate(interpreter: *Interpreter, args: []Expr) !Expr {
+fn Comparison(comptime comp: ComparisonType) NativeCall {
+    const impl = struct {
+        fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
             const first = switch (args[0]) {
                 .number => |number| number,
                 else => return error.ComparisonNotANumber,
@@ -109,6 +111,7 @@ fn Comparison(comp: ComparisonType) type {
             return Expr{ .t = {} };
         }
     };
+    return impl.inner;
 }
 
 fn print(interpreter: *Interpreter, args: []Expr) !Expr {
