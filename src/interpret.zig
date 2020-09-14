@@ -1,6 +1,5 @@
 const std = @import("std");
 
-pub const NativeCall = fn (*Interpreter, []Expr) anyerror!Expr;
 pub const Call = struct {
     params: std.ArrayList(Expr),
     body: std.ArrayList(Expr),
@@ -253,3 +252,5 @@ pub const Interpreter = struct {
         }
     }
 };
+
+pub const NativeCall = fn (*Interpreter, []Expr) anyerror!Expr;
