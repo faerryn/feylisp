@@ -41,6 +41,7 @@ pub fn main() !void {
             if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
         }
     }
+
     repl_loop: while (true) {
         const PROMPT = " >> ";
         _ = try stdout.write(PROMPT);
