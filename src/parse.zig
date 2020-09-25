@@ -1,7 +1,7 @@
 const std = @import("std");
 const interpret = @import("interpret.zig");
-const Expr = interpret.Expr;
-const Interpreter = interpret.Interpreter;
+const LispExpr = interpret.LispExpr;
+const LispInterpreter = interpret.LispInterpreter;
 
 pub const Token = struct {
     id: Id,
@@ -19,12 +19,12 @@ pub const Token = struct {
     };
 };
 
-pub const Tokenizer = struct {
+pub const LispTokenizer = struct {
     source: []const u8,
     index: usize,
 
-    pub fn init(source: []const u8) Tokenizer {
-        return Tokenizer{
+    pub fn init(source: []const u8) LispTokenizer {
+        return LispTokenizer{
             .source = source,
             .index = 0,
         };
@@ -45,7 +45,7 @@ pub const Tokenizer = struct {
         close_paren,
     };
 
-    pub fn next(self: *Tokenizer) !?Token {
+    pub fn next(self: *LispTokenizer) !?Token {
         const start_index = self.index;
         var state = State.start;
         var result = Token{
@@ -184,14 +184,14 @@ pub const Tokenizer = struct {
     }
 };
 
-pub const Parser = struct {
-    interpreter: *Interpreter,
+pub const LispParser = struct {
+    interpreter: *LispInterpreter,
     source: []const u8,
     tokens: []Token,
     index: usize,
 
-    pub fn init(interpreter: *Interpreter, source: []const u8, tokens: []Token) Parser {
-        return Parser{
+    pub fn init(interpreter: *LispInterpreter, source: []const u8, tokens: []Token) LispParser {
+        return LispParser{
             .interpreter = interpreter,
             .source = source,
             .tokens = tokens,
@@ -199,7 +199,7 @@ pub const Parser = struct {
         };
     }
 
-    pub fn next(self: *Parser) anyerror!?Expr {
+    pub fn next(self: *LispParser) anyerror!?LispExpr {
         if (self.index >= self.tokens.len) return null;
         const t = self.tokens[self.index];
         self.index += 1;
@@ -211,7 +211,7 @@ pub const Parser = struct {
                 list.* = std.ArrayList(u8).init(self.interpreter.allocator);
                 errdefer list.deinit();
                 try list.appendSlice(self.source[t.start..t.end]);
-                return try self.interpreter.store(Expr{ .identifier = list });
+                return try self.interpreter.store(LispExpr{ .identifier = list });
             },
             .string_literal => {
                 var list = try self.interpreter.allocator.create(std.ArrayList(u8));
@@ -235,16 +235,16 @@ pub const Parser = struct {
                         }
                     }
                 }
-                return try self.interpreter.store(Expr{ .string = list });
+                return try self.interpreter.store(LispExpr{ .string = list });
             },
             .integer_literal, .float_literal => {
                 const num = try std.fmt.parseInt(isize, self.source[t.start..t.end], 10);
-                return Expr{ .number = num };
+                return LispExpr{ .number = num };
             },
             .open_paren => {
-                var list = try self.interpreter.allocator.create(std.ArrayList(Expr));
+                var list = try self.interpreter.allocator.create(std.ArrayList(LispExpr));
                 errdefer self.interpreter.allocator.destroy(list);
-                list.* = std.ArrayList(Expr).init(self.interpreter.allocator);
+                list.* = std.ArrayList(LispExpr).init(self.interpreter.allocator);
                 errdefer list.deinit();
                 errdefer for (list.items) |branch| branch.deinit();
                 while (self.tokens[self.index].id != .close_paren) {
@@ -255,7 +255,7 @@ pub const Parser = struct {
                     }
                 }
                 self.index += 1;
-                return try self.interpreter.store(Expr{ .list = list });
+                return try self.interpreter.store(LispExpr{ .list = list });
             },
             .close_paren => return error.ParserOverclosedParen,
         }

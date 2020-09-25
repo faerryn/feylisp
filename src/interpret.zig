@@ -1,12 +1,12 @@
 const std = @import("std");
 
 pub const Call = struct {
-    params: std.ArrayList(Expr),
-    body: std.ArrayList(Expr),
+    params: std.ArrayList(LispExpr),
+    body: std.ArrayList(LispExpr),
 };
 
-pub const Expr = union(enum) {
-    list: *std.ArrayList(Expr),
+pub const LispExpr = union(enum) {
+    list: *std.ArrayList(LispExpr),
     identifier: *std.ArrayList(u8),
     string: *std.ArrayList(u8),
     number: isize,
@@ -17,7 +17,7 @@ pub const Expr = union(enum) {
     native_func: usize,
     native_macro: usize,
 
-    pub fn deinit(self: Expr) void {
+    pub fn deinit(self: LispExpr) void {
         switch (self) {
             .list => |list| list.deinit(),
             .identifier, .string => |string| string.deinit(),
@@ -30,7 +30,7 @@ pub const Expr = union(enum) {
     }
 
     pub fn format(
-        self: Expr,
+        self: LispExpr,
         fmt: []const u8,
         options: std.fmt.FormatOptions,
         writer: anytype,
@@ -90,22 +90,22 @@ pub const Expr = union(enum) {
     }
 };
 
-pub const Interpreter = struct {
+pub const LispInterpreter = struct {
     allocator: *std.mem.Allocator,
-    heap: std.ArrayList(Expr),
-    scope: std.StringHashMap(Expr),
-    parent: ?*Interpreter,
+    heap: std.ArrayList(LispExpr),
+    scope: std.StringHashMap(LispExpr),
+    parent: ?*LispInterpreter,
 
-    pub fn init(allocator: *std.mem.Allocator, parent: ?*Interpreter) Interpreter {
-        return Interpreter{
+    pub fn init(allocator: *std.mem.Allocator, parent: ?*LispInterpreter) LispInterpreter {
+        return LispInterpreter{
             .allocator = allocator,
-            .heap = std.ArrayList(Expr).init(allocator),
-            .scope = std.StringHashMap(Expr).init(allocator),
+            .heap = std.ArrayList(LispExpr).init(allocator),
+            .scope = std.StringHashMap(LispExpr).init(allocator),
             .parent = parent,
         };
     }
 
-    pub fn deinit(self: *Interpreter) void {
+    pub fn deinit(self: *LispInterpreter) void {
         self.scope.deinit();
         for (self.heap.items) |branch| {
             branch.deinit();
@@ -121,7 +121,7 @@ pub const Interpreter = struct {
         self.heap.deinit();
     }
 
-    pub fn eval(self: *Interpreter, expr: Expr) anyerror!Expr {
+    pub fn eval(self: *LispInterpreter, expr: LispExpr) anyerror!LispExpr {
         switch (expr) {
             .number, .t, .nil, .string, .func, .macro, .native_func, .native_macro => return expr,
             .list => |list| {
@@ -130,7 +130,7 @@ pub const Interpreter = struct {
                 switch (called) {
                     .native_macro => |native_call| return try @intToPtr(NativeCall, native_call)(self, list.items[1..]),
                     .native_func => |native_call| {
-                        var args_list = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len - 1);
+                        var args_list = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
                         return try @intToPtr(NativeCall, native_call)(self, args_list.items);
@@ -138,7 +138,7 @@ pub const Interpreter = struct {
                     .func => |func| {
                         if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
                         if (func.body.items.len < 1) return error.InterpreterFuncNoBody;
-                        var sub_interpreter = Interpreter.init(self.allocator, self);
+                        var sub_interpreter = LispInterpreter.init(self.allocator, self);
                         defer sub_interpreter.deinit();
                         for (func.params.items) |param, i| switch (param) {
                             .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, try sub_interpreter.eval(list.items[i + 1])),
@@ -150,7 +150,7 @@ pub const Interpreter = struct {
                     .macro => |macro| {
                         if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
                         if (macro.body.items.len < 1) return error.InterpreterMacroNoBody;
-                        var sub_interpreter = Interpreter.init(self.allocator, self);
+                        var sub_interpreter = LispInterpreter.init(self.allocator, self);
                         defer sub_interpreter.deinit();
                         for (macro.params.items) |param, i| switch (param) {
                             .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, list.items[i + 1]),
@@ -169,13 +169,13 @@ pub const Interpreter = struct {
         }
     }
 
-    pub fn get(self: Interpreter, identifier: []const u8) ?Expr {
+    pub fn get(self: LispInterpreter, identifier: []const u8) ?LispExpr {
         if (self.scope.getEntry(identifier)) |entry| return entry.value;
         if (self.parent) |real_parent| return real_parent.get(identifier);
         return null;
     }
 
-    pub fn store(self: *Interpreter, expr: Expr) !Expr {
+    pub fn store(self: *LispInterpreter, expr: LispExpr) !LispExpr {
         switch (expr) {
             .list, .string, .identifier, .func, .macro => try self.heap.append(expr),
             .number, .t, .nil, .native_func, .native_macro => return error.StoreNotHeapAllocated,
@@ -183,7 +183,7 @@ pub const Interpreter = struct {
         return expr;
     }
 
-    pub fn clone(self: *Interpreter, expr: Expr, steal: bool) anyerror!Expr {
+    pub fn clone(self: *LispInterpreter, expr: LispExpr, steal: bool) anyerror!LispExpr {
         switch (expr) {
             .number, .t, .nil, .native_func, .native_macro => return expr,
             .string, .identifier => |string| {
@@ -197,55 +197,55 @@ pub const Interpreter = struct {
                     try copy.appendSlice(string.items);
                 }
                 switch (expr) {
-                    .string => return self.store(Expr{ .string = copy }),
-                    .identifier => return self.store(Expr{ .identifier = copy }),
+                    .string => return self.store(LispExpr{ .string = copy }),
+                    .identifier => return self.store(LispExpr{ .identifier = copy }),
                     else => unreachable,
                 }
             },
             .list => |list| {
-                var copy = try self.allocator.create(std.ArrayList(Expr));
+                var copy = try self.allocator.create(std.ArrayList(LispExpr));
                 errdefer self.allocator.destroy(copy);
                 if (steal) {
-                    copy.* = std.ArrayList(Expr).fromOwnedSlice(list.allocator, list.toOwnedSlice());
+                    copy.* = std.ArrayList(LispExpr).fromOwnedSlice(list.allocator, list.toOwnedSlice());
                     var i: usize = 0;
                     while (i < copy.items.len) : (i += 1) {
                         copy.items[i] = try self.clone(copy.items[i], true);
                     }
                 } else {
-                    copy.* = try std.ArrayList(Expr).initCapacity(self.allocator, list.items.len);
+                    copy.* = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len);
                     errdefer copy.deinit();
                     for (list.items) |branch| try copy.append(try self.clone(branch, false));
                 }
-                return self.store(Expr{ .list = copy });
+                return self.store(LispExpr{ .list = copy });
             },
             .func, .macro => |call| {
                 var copy = try self.allocator.create(Call);
                 errdefer self.allocator.destroy(copy);
                 if (steal) {
-                    copy.params = std.ArrayList(Expr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
+                    copy.params = std.ArrayList(LispExpr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
                     var i: usize = 0;
                     while (i < copy.params.items.len) : (i += 1) {
                         copy.params.items[i] = try self.clone(copy.params.items[i], true);
                     }
                 } else {
-                    copy.params = try std.ArrayList(Expr).initCapacity(self.allocator, call.params.items.len);
+                    copy.params = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.params.items.len);
                     errdefer copy.params.deinit();
                     for (call.params.items) |branch| try copy.params.append(try self.clone(branch, false));
                 }
                 if (steal) {
-                    copy.body = std.ArrayList(Expr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
+                    copy.body = std.ArrayList(LispExpr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
                     var i: usize = 0;
                     while (i < copy.body.items.len) : (i += 1) {
                         copy.body.items[i] = try self.clone(copy.body.items[i], true);
                     }
                 } else {
-                    copy.body = try std.ArrayList(Expr).initCapacity(self.allocator, call.body.items.len);
+                    copy.body = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.body.items.len);
                     errdefer copy.body.deinit();
                     for (call.body.items) |branch| try copy.body.append(try self.clone(branch, false));
                 }
                 switch (expr) {
-                    .func => return self.store(Expr{ .func = copy }),
-                    .macro => return self.store(Expr{ .macro = copy }),
+                    .func => return self.store(LispExpr{ .func = copy }),
+                    .macro => return self.store(LispExpr{ .macro = copy }),
                     else => unreachable,
                 }
             },
@@ -253,4 +253,4 @@ pub const Interpreter = struct {
     }
 };
 
-pub const NativeCall = fn (*Interpreter, []Expr) anyerror!Expr;
+pub const NativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;

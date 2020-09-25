@@ -4,12 +4,12 @@ const stderr = std.io.getStdErr().writer();
 const stdin = std.io.getStdIn().reader();
 
 const parse = @import("parse.zig");
-const Tokenizer = parse.Tokenizer;
-const Parser = parse.Parser;
+const LispTokenizer = parse.LispTokenizer;
+const LispParser = parse.LispParser;
 
 const interpret = @import("interpret.zig");
-const Expr = interpret.Expr;
-const Interpreter = interpret.Interpreter;
+const LispExpr = interpret.LispExpr;
+const LispInterpreter = interpret.LispInterpreter;
 
 const library = @import("library.zig");
 
@@ -20,7 +20,7 @@ pub fn main() !void {
 
     var core = try library.initCore(allocator);
     defer core.deinit();
-    var interpreter = Interpreter.init(allocator, &core);
+    var interpreter = LispInterpreter.init(allocator, &core);
     defer interpreter.deinit();
 
     var args = try std.process.argsAlloc(allocator);
@@ -32,11 +32,11 @@ pub fn main() !void {
         var source = std.ArrayList(u8).init(allocator);
         defer source.deinit();
         try file.reader().readAllArrayList(&source, len);
-        var tokenizer = Tokenizer.init(source.items);
+        var tokenizer = LispTokenizer.init(source.items);
         var tokens = std.ArrayList(parse.Token).init(allocator);
         defer tokens.deinit();
         while (try tokenizer.next()) |token| try tokens.append(token);
-        var parser = Parser.init(&interpreter, source.items, tokens.items);
+        var parser = LispParser.init(&interpreter, source.items, tokens.items);
         while (try parser.next()) |expr| {
             if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
         }
@@ -77,11 +77,11 @@ pub fn main() !void {
             }
         }
 
-        var tokenizer = Tokenizer.init(source.items);
+        var tokenizer = LispTokenizer.init(source.items);
         var tokens = std.ArrayList(parse.Token).init(allocator);
         defer tokens.deinit();
         while (try tokenizer.next()) |token| try tokens.append(token);
-        var parser = Parser.init(&interpreter, source.items, tokens.items);
+        var parser = LispParser.init(&interpreter, source.items, tokens.items);
         while (try parser.next()) |expr| {
             if (interpreter.eval(expr)) |result| {
                 try stdout.print("{}\n", .{result});

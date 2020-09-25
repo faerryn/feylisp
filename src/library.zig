@@ -3,42 +3,42 @@ const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 
 const parse = @import("parse.zig");
-const Tokenizer = parse.Tokenizer;
-const Parser = parse.Parser;
+const LispTokenizer = parse.LispTokenizer;
+const LispParser = parse.LispParser;
 
 const interpret = @import("interpret.zig");
-const Expr = interpret.Expr;
+const LispExpr = interpret.LispExpr;
 const Call = interpret.Call;
 const NativeCall = interpret.NativeCall;
-const Interpreter = interpret.Interpreter;
+const LispInterpreter = interpret.LispInterpreter;
 
-pub fn initCore(allocator: *std.mem.Allocator) !Interpreter {
-    var core = Interpreter.init(allocator, null);
+pub fn initCore(allocator: *std.mem.Allocator) !LispInterpreter {
+    var core = LispInterpreter.init(allocator, null);
     errdefer core.deinit();
-    try core.scope.put("nil", Expr{ .nil = {} });
-    try core.scope.put("t", Expr{ .t = {} });
-    try core.scope.put("+", Expr{ .native_func = @ptrToInt(Operation(.add)) });
-    try core.scope.put("-", Expr{ .native_func = @ptrToInt(Operation(.sub)) });
-    try core.scope.put("*", Expr{ .native_func = @ptrToInt(Operation(.mul)) });
-    try core.scope.put("/", Expr{ .native_func = @ptrToInt(Operation(.div)) });
-    try core.scope.put("=", Expr{ .native_func = @ptrToInt(Comparison(.eq)) });
-    try core.scope.put("!=", Expr{ .native_func = @ptrToInt(Comparison(.neq)) });
-    try core.scope.put("<", Expr{ .native_func = @ptrToInt(Comparison(.lt)) });
-    try core.scope.put("<=", Expr{ .native_func = @ptrToInt(Comparison(.lteq)) });
-    try core.scope.put(">", Expr{ .native_func = @ptrToInt(Comparison(.gt)) });
-    try core.scope.put(">=", Expr{ .native_func = @ptrToInt(Comparison(.gteq)) });
-    try core.scope.put("print", Expr{ .native_func = @ptrToInt(print) });
-    try core.scope.put("let", Expr{ .native_macro = @ptrToInt(let) });
-    try core.scope.put("func", Expr{ .native_macro = @ptrToInt(Callable(.func).call) });
-    try core.scope.put("macro", Expr{ .native_macro = @ptrToInt(Callable(.macro).call) });
-    try core.scope.put("if", Expr{ .native_macro = @ptrToInt(@"if") });
-    try core.scope.put("while", Expr{ .native_macro = @ptrToInt(@"while") });
-    try core.scope.put("list", Expr{ .native_func = @ptrToInt(list) });
-    try core.scope.put("len", Expr{ .native_func = @ptrToInt(len) });
-    try core.scope.put("at", Expr{ .native_func = @ptrToInt(at) });
-    try core.scope.put("push", Expr{ .native_func = @ptrToInt(push) });
-    try core.scope.put("pop", Expr{ .native_func = @ptrToInt(pop) });
-    try core.scope.put("clone", Expr{ .native_func = @ptrToInt(clone) });
+    try core.scope.put("nil", LispExpr{ .nil = {} });
+    try core.scope.put("t", LispExpr{ .t = {} });
+    try core.scope.put("+", LispExpr{ .native_func = @ptrToInt(Operation(.add)) });
+    try core.scope.put("-", LispExpr{ .native_func = @ptrToInt(Operation(.sub)) });
+    try core.scope.put("*", LispExpr{ .native_func = @ptrToInt(Operation(.mul)) });
+    try core.scope.put("/", LispExpr{ .native_func = @ptrToInt(Operation(.div)) });
+    try core.scope.put("=", LispExpr{ .native_func = @ptrToInt(Comparison(.eq)) });
+    try core.scope.put("!=", LispExpr{ .native_func = @ptrToInt(Comparison(.neq)) });
+    try core.scope.put("<", LispExpr{ .native_func = @ptrToInt(Comparison(.lt)) });
+    try core.scope.put("<=", LispExpr{ .native_func = @ptrToInt(Comparison(.lteq)) });
+    try core.scope.put(">", LispExpr{ .native_func = @ptrToInt(Comparison(.gt)) });
+    try core.scope.put(">=", LispExpr{ .native_func = @ptrToInt(Comparison(.gteq)) });
+    try core.scope.put("print", LispExpr{ .native_func = @ptrToInt(print) });
+    try core.scope.put("let", LispExpr{ .native_macro = @ptrToInt(let) });
+    try core.scope.put("func", LispExpr{ .native_macro = @ptrToInt(Callable(.func).call) });
+    try core.scope.put("macro", LispExpr{ .native_macro = @ptrToInt(Callable(.macro).call) });
+    try core.scope.put("if", LispExpr{ .native_macro = @ptrToInt(@"if") });
+    try core.scope.put("while", LispExpr{ .native_macro = @ptrToInt(@"while") });
+    try core.scope.put("list", LispExpr{ .native_func = @ptrToInt(list) });
+    try core.scope.put("len", LispExpr{ .native_func = @ptrToInt(len) });
+    try core.scope.put("at", LispExpr{ .native_func = @ptrToInt(at) });
+    try core.scope.put("push", LispExpr{ .native_func = @ptrToInt(push) });
+    try core.scope.put("pop", LispExpr{ .native_func = @ptrToInt(pop) });
+    try core.scope.put("clone", LispExpr{ .native_func = @ptrToInt(clone) });
     return core;
 }
 
@@ -46,7 +46,7 @@ const OperationType = enum { add, sub, mul, div };
 fn Operation(comptime op: OperationType) NativeCall {
     const impl = switch (op) {
         .add, .mul => struct {
-            fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
+            fn inner(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
                 var acc: isize = switch (op) {
                     .add => 0,
                     .mul => 1,
@@ -62,11 +62,11 @@ fn Operation(comptime op: OperationType) NativeCall {
                         else => return error.OperationNotANumber,
                     }
                 }
-                return Expr{ .number = acc };
+                return LispExpr{ .number = acc };
             }
         },
         .sub, .div => struct {
-            fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
+            fn inner(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
                 if (args.len != 2) return error.OperationInvalidArguments;
                 const first = switch (args[0]) {
                     .number => |number| number,
@@ -76,7 +76,7 @@ fn Operation(comptime op: OperationType) NativeCall {
                     .number => |number| number,
                     else => return error.OperationNotANumber,
                 };
-                return Expr{
+                return LispExpr{
                     .number = switch (op) {
                         .sub => first - second,
                         .div => @divTrunc(first, second),
@@ -92,7 +92,7 @@ fn Operation(comptime op: OperationType) NativeCall {
 const ComparisonType = enum { eq, neq, gt, gteq, lt, lteq };
 fn Comparison(comptime comp: ComparisonType) NativeCall {
     const impl = struct {
-        fn inner(interpreter: *Interpreter, args: []Expr) !Expr {
+        fn inner(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
             const first = switch (args[0]) {
                 .number => |number| number,
                 else => return error.ComparisonNotANumber,
@@ -105,16 +105,16 @@ fn Comparison(comptime comp: ComparisonType) NativeCall {
                     .gteq => first >= number,
                     .lt => first < number,
                     .lteq => first <= number,
-                }) return Expr{ .nil = {} },
+                }) return LispExpr{ .nil = {} },
                 else => return error.ComparisonNotANumber,
             };
-            return Expr{ .t = {} };
+            return LispExpr{ .t = {} };
         }
     };
     return impl.inner;
 }
 
-fn print(interpreter: *Interpreter, args: []Expr) !Expr {
+fn print(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len == 0) return error.PrintInvalidArguments;
     for (args) |arg| {
         switch (arg) {
@@ -125,7 +125,7 @@ fn print(interpreter: *Interpreter, args: []Expr) !Expr {
     return args[args.len - 1];
 }
 
-fn let(interpreter: *Interpreter, args: []Expr) !Expr {
+fn let(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 2) return error.LetInvalidArguments;
     switch (args[0]) {
         .identifier => |identifier| {
@@ -143,12 +143,12 @@ const CallableType = enum {
 };
 fn Callable(callable_type: CallableType) type {
     return struct {
-        fn call(interpreter: *Interpreter, args: []Expr) !Expr {
+        fn call(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
             if (args.len < 2) return error.FuncInvalidArguments;
             if (args[0] != .list) return error.FuncNoParameters;
             var callable = try interpreter.allocator.create(Call);
             errdefer interpreter.allocator.destroy(callable);
-            callable.params = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args[0].list.items.len);
+            callable.params = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args[0].list.items.len);
             errdefer callable.params.deinit();
             for (args[0].list.items) |param| {
                 if (param == .identifier) {
@@ -157,18 +157,18 @@ fn Callable(callable_type: CallableType) type {
                     return error.FuncInvalidParameter;
                 }
             }
-            callable.body = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len - 1);
+            callable.body = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len - 1);
             errdefer callable.body.deinit();
             for (args[1..]) |expr| try callable.body.append(expr);
             switch (callable_type) {
-                .func => return try interpreter.store(Expr{ .func = callable }),
-                .macro => return try interpreter.store(Expr{ .macro = callable }),
+                .func => return try interpreter.store(LispExpr{ .func = callable }),
+                .macro => return try interpreter.store(LispExpr{ .macro = callable }),
             }
         }
     };
 }
 
-fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
+fn @"if"(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len < 3) return error.IfInvalidArguments;
     const cond = try interpreter.eval(args[0]);
     if (cond != .nil) {
@@ -181,30 +181,30 @@ fn @"if"(interpreter: *Interpreter, args: []Expr) !Expr {
     }
 }
 
-fn @"while"(interpreter: *Interpreter, args: []Expr) !Expr {
+fn @"while"(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len < 2) return error.WhileInvalidArguments;
     while ((try interpreter.eval(args[0])) != .nil) {
         for (args[1..]) |branch| _ = try interpreter.eval(branch);
     }
-    return Expr{ .nil = {} };
+    return LispExpr{ .nil = {} };
 }
 
-fn list(interpreter: *Interpreter, args: []Expr) !Expr {
-    var exprs = try interpreter.allocator.create(std.ArrayList(Expr));
+fn list(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
+    var exprs = try interpreter.allocator.create(std.ArrayList(LispExpr));
     errdefer interpreter.allocator.destroy(exprs);
-    exprs.* = try std.ArrayList(Expr).initCapacity(interpreter.allocator, args.len);
+    exprs.* = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len);
     errdefer exprs.deinit();
     for (args) |arg| try exprs.append(arg);
-    return try interpreter.store(Expr{ .list = exprs });
+    return try interpreter.store(LispExpr{ .list = exprs });
 }
 
-fn len(interpreter: *Interpreter, args: []Expr) !Expr {
+fn len(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 1) return error.LenInvalidArguments;
     if (args[0] != .list) return error.PushNotAList;
-    return Expr{ .number = @intCast(isize, args[0].list.items.len) };
+    return LispExpr{ .number = @intCast(isize, args[0].list.items.len) };
 }
 
-fn at(interpreter: *Interpreter, args: []Expr) !Expr {
+fn at(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 2) return error.AtInvalidArguments;
     if (args[0] != .list) return error.AtNotAList;
     if (args[1] != .number) return error.AtNotANumber;
@@ -213,20 +213,20 @@ fn at(interpreter: *Interpreter, args: []Expr) !Expr {
     return args[0].list.items[@intCast(usize, index)];
 }
 
-fn push(interpreter: *Interpreter, args: []Expr) !Expr {
+fn push(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len < 2) return error.PushInvalidArguments;
     if (args[0] != .list) return error.PushNotAList;
     for (args[1..]) |branch| try args[0].list.append(branch);
     return args[args.len - 1];
 }
 
-fn pop(interpreter: *Interpreter, args: []Expr) !Expr {
+fn pop(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 1) return error.PopInvalidArguments;
     if (args[0] != .list) return error.PopNotAList;
     return args[0].list.pop();
 }
 
-fn clone(interpreter: *Interpreter, args: []Expr) !Expr {
+fn clone(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 1) return error.CloneInvalidArguments;
     return interpreter.clone(args[0], false);
 }
