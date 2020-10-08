@@ -25,23 +25,29 @@ pub fn main() !void {
 
     var args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-    for (args[1..]) |path| {
-        var file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
-        const len = try file.getEndPos();
-        var source = std.ArrayList(u8).init(allocator);
-        defer source.deinit();
-        try file.reader().readAllArrayList(&source, len);
-        var tokenizer = LispTokenizer.init(source.items);
-        var tokens = std.ArrayList(parse.Token).init(allocator);
-        defer tokens.deinit();
-        while (try tokenizer.next()) |token| try tokens.append(token);
-        var parser = LispParser.init(&interpreter, source.items, tokens.items);
-        while (try parser.next()) |expr| {
-            if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
-        }
-    }
+    for (args[1..]) |path| try run_file(allocator, &interpreter, path);
 
+    try repl(allocator, &interpreter);
+}
+
+fn run_file(allocator: *std.mem.Allocator, interpreter: *LispInterpreter, path: []const u8) !void {
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+    const len = try file.getEndPos();
+    var source = std.ArrayList(u8).init(allocator);
+    defer source.deinit();
+    try file.reader().readAllArrayList(&source, len);
+    var tokenizer = LispTokenizer.init(source.items);
+    var tokens = std.ArrayList(parse.Token).init(allocator);
+    defer tokens.deinit();
+    while (try tokenizer.next()) |token| try tokens.append(token);
+    var parser = LispParser.init(interpreter, source.items, tokens.items);
+    while (try parser.next()) |expr| {
+        if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
+    }
+}
+
+fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
     repl_loop: while (true) {
         const PROMPT = " >> ";
         _ = try stdout.write(PROMPT);
@@ -81,7 +87,7 @@ pub fn main() !void {
         var tokens = std.ArrayList(parse.Token).init(allocator);
         defer tokens.deinit();
         while (try tokenizer.next()) |token| try tokens.append(token);
-        var parser = LispParser.init(&interpreter, source.items, tokens.items);
+        var parser = LispParser.init(interpreter, source.items, tokens.items);
         while (try parser.next()) |expr| {
             if (interpreter.eval(expr)) |result| {
                 try stdout.print("{}\n", .{result});
