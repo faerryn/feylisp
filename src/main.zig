@@ -11,7 +11,6 @@ const LispInterpreter = interpret.LispInterpreter;
 const library = @import("library.zig");
 
 pub fn main() !void {
-
     var main_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = main_allocator.deinit();
     const allocator = &main_allocator.allocator;
