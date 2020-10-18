@@ -1,6 +1,4 @@
 const std = @import("std");
-const stdout = std.io.getStdOut().writer();
-const stderr = std.io.getStdErr().writer();
 
 const parse = @import("parse.zig");
 const LispTokenizer = parse.LispTokenizer;
@@ -115,6 +113,7 @@ fn Comparison(comptime comp: ComparisonType) NativeCall {
 }
 
 fn print(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
+    const stdout = std.io.getStdOut().writer();
     if (args.len == 0) return error.PrintInvalidArguments;
     for (args) |arg| {
         switch (arg) {

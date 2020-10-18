@@ -1,7 +1,4 @@
 const std = @import("std");
-const stdout = std.io.getStdOut().writer();
-const stderr = std.io.getStdErr().writer();
-const stdin = std.io.getStdIn().reader();
 
 const parse = @import("parse.zig");
 const LispTokenizer = parse.LispTokenizer;
@@ -14,6 +11,7 @@ const LispInterpreter = interpret.LispInterpreter;
 const library = @import("library.zig");
 
 pub fn main() !void {
+
     var main_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = main_allocator.deinit();
     const allocator = &main_allocator.allocator;
@@ -31,6 +29,8 @@ pub fn main() !void {
 }
 
 fn run_file(allocator: *std.mem.Allocator, interpreter: *LispInterpreter, path: []const u8) !void {
+    const stdout = std.io.getStdOut().writer();
+    const stderr = std.io.getStdErr().writer();
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     const len = try file.getEndPos();
@@ -48,6 +48,10 @@ fn run_file(allocator: *std.mem.Allocator, interpreter: *LispInterpreter, path: 
 }
 
 fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
+    const stdout = std.io.getStdOut().writer();
+    const stderr = std.io.getStdErr().writer();
+    const stdin = std.io.getStdIn().reader();
+
     repl_loop: while (true) {
         const PROMPT = " >> ";
         _ = try stdout.write(PROMPT);
@@ -56,6 +60,7 @@ fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
         defer source.deinit();
 
         var parens: usize = 0;
+
         while (true) {
             const c = stdin.readByte() catch |err| switch (err) {
                 error.EndOfStream => break :repl_loop,
