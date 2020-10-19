@@ -5,6 +5,8 @@ pub const Call = struct {
     body: std.ArrayList(LispExpr),
 };
 
+pub const NativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;
+
 pub const LispExpr = union(enum) {
     list: *std.ArrayList(LispExpr),
     identifier: *std.ArrayList(u8),
@@ -252,5 +254,3 @@ pub const LispInterpreter = struct {
         }
     }
 };
-
-pub const NativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;
