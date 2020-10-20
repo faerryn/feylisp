@@ -6,4 +6,3 @@
 	  (at mem n)
 	  (push mem
 		(+ (fib (+ n -1)) (fib (+ n -2)))))))
-(print "fib(70) = " (fib 70) "\n")

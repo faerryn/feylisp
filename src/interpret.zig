@@ -135,38 +135,53 @@ pub const LispInterpreter = struct {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
                 switch (called) {
+
                     .native_macro => |native_call| return try @intToPtr(LispNativeCall, native_call)(self, list.items[1..]),
+
                     .native_func => |native_call| {
                         var args_list = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
                         return try @intToPtr(LispNativeCall, native_call)(self, args_list.items);
                     },
-                    .func => |func| {
-                        if (func.call.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
-                        if (func.call.body.items.len < 1) return error.InterpreterFuncNoBody;
-                        func.interpreter.parent = self;
-                        for (func.call.params.items) |param, i| switch (param) {
-                            .identifier => |identifier| try func.interpreter.scope.put(identifier.items, try func.interpreter.eval(list.items[i + 1])),
-                            else => return error.InterpreterFuncInvalidParameter,
-                        };
-                        for (func.call.body.items[0 .. func.call.body.items.len - 1]) |body_expr| _ = try func.interpreter.eval(body_expr);
-                        const result = try self.clone(try func.interpreter.eval(func.call.body.items[func.call.body.items.len - 1]));
-                        func.interpreter.parent = null;
-                        return result;
-                    },
+
                     .macro => |macro| {
                         if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
                         if (macro.body.items.len < 1) return error.InterpreterMacroNoBody;
+
                         var sub_interpreter = LispInterpreter.init(self.allocator, self);
                         defer sub_interpreter.deinit();
+
                         for (macro.params.items) |param, i| switch (param) {
                             .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, list.items[i + 1]),
                             else => return error.InterpreterMacroInvalidParameter,
                         };
+
                         for (macro.body.items[0 .. macro.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
+
                         return try self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
                     },
+
+                    .func => |func| {
+                        if (func.call.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
+                        if (func.call.body.items.len < 1) return error.InterpreterFuncNoBody;
+
+                        var sub_interpreter = LispInterpreter.init(self.allocator, self);
+                        defer sub_interpreter.deinit();
+
+                        var it = func.interpreter.scope.iterator();
+                        while (it.next()) |entry| try sub_interpreter.scope.put(entry.key, try sub_interpreter.clone(entry.value));
+
+                        for (func.call.params.items) |param, i| switch (param) {
+                            .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, try sub_interpreter.eval(list.items[i + 1])),
+                            else => return error.InterpreterFuncInvalidParameter,
+                        };
+
+                        for (func.call.body.items[0 .. func.call.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
+
+                        return try self.clone(try sub_interpreter.eval(func.call.body.items[func.call.body.items.len - 1]));
+                    },
+
                     else => return error.InterpreterNoSuchFunction,
                 }
             },
