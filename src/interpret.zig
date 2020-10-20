@@ -5,6 +5,11 @@ pub const LispCall = struct {
     body: std.ArrayList(LispExpr),
 };
 
+pub const LispClosure = struct {
+    call: LispCall,
+    interpreter: LispInterpreter,
+};
+
 pub const LispNativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;
 
 pub const LispExpr = union(enum) {
@@ -14,7 +19,7 @@ pub const LispExpr = union(enum) {
     number: isize,
     t,
     nil,
-    func: *LispCall,
+    func: *LispClosure,
     macro: *LispCall,
     native_func: usize,
     native_macro: usize,
@@ -23,9 +28,14 @@ pub const LispExpr = union(enum) {
         switch (self) {
             .list => |list| list.deinit(),
             .identifier, .string => |string| string.deinit(),
-            .func, .macro => |call| {
+            .macro => |call| {
                 call.params.deinit();
                 call.body.deinit();
+            },
+            .func => |closure| {
+                closure.call.params.deinit();
+                closure.call.body.deinit();
+                closure.interpreter.deinit();
             },
             .number, .t, .nil, .native_func, .native_macro => {},
         }
@@ -62,28 +72,24 @@ pub const LispExpr = union(enum) {
             .number => |number| try writer.print("{d:}", .{number}),
             .t => _ = try writer.write("t"),
             .nil => _ = try writer.write("nil"),
-            .func => |call| {
+            .func => |closure| {
                 _ = try writer.write("(func (");
-                if (call.params.items.len > 0) {
-                    for (call.params.items[0 .. call.params.items.len - 1]) |param| try writer.print("{} ", .{param});
-                    try writer.print("{}", .{call.params.items[call.params.items.len - 1]});
+                if (closure.call.params.items.len > 0) 
+                    for (closure.call.params.items) |param| try writer.print("{} ", .{param});
+                _ = try writer.write(") (");
+                if (closure.interpreter.scope.count() > 0) {
+                    var it = closure.interpreter.scope.iterator();
+                    while (it.next()) |capture| try writer.print("{}={} ", .{capture.key, capture.value});
                 }
                 _ = try writer.write(")");
-                if (call.body.items.len > 0) {
-                    for (call.body.items) |expr| try writer.print("\n{}", .{expr});
-                }
+                if (closure.call.body.items.len > 0) for (closure.call.body.items) |expr| try writer.print("\n{}", .{expr});
                 _ = try writer.write(")");
             },
             .macro => |call| {
                 _ = try writer.write("(macro (");
-                if (call.params.items.len > 0) {
-                    for (call.params.items[0 .. call.params.items.len - 1]) |param| try writer.print("{} ", .{param});
-                    try writer.print("{}", .{call.params.items[call.params.items.len - 1]});
-                }
+                if (call.params.items.len > 0) for (call.params.items) |param| try writer.print("{} ", .{param});
                 _ = try writer.write(")");
-                if (call.body.items.len > 0) {
-                    for (call.body.items) |expr| try writer.print("\n{}", .{expr});
-                }
+                if (call.body.items.len > 0) for (call.body.items) |expr| try writer.print("\n{}", .{expr});
                 _ = try writer.write(")");
             },
             .native_func => |native_call| try writer.print("func@{}", .{native_call}),
@@ -115,9 +121,8 @@ pub const LispInterpreter = struct {
                 .number, .t, .nil, .native_func, .native_macro => {},
                 .list => |list| self.allocator.destroy(list),
                 .identifier, .string => |list| self.allocator.destroy(list),
-                .func, .macro => |call| {
-                    self.allocator.destroy(call);
-                },
+                .macro => |call| self.allocator.destroy(call),
+                .func => |closure| self.allocator.destroy(closure),
             }
         }
         self.heap.deinit();
@@ -138,16 +143,17 @@ pub const LispInterpreter = struct {
                         return try @intToPtr(LispNativeCall, native_call)(self, args_list.items);
                     },
                     .func => |func| {
-                        if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
-                        if (func.body.items.len < 1) return error.InterpreterFuncNoBody;
-                        var sub_interpreter = LispInterpreter.init(self.allocator, self);
-                        defer sub_interpreter.deinit();
-                        for (func.params.items) |param, i| switch (param) {
-                            .identifier => |identifier| try sub_interpreter.scope.put(identifier.items, try sub_interpreter.eval(list.items[i + 1])),
+                        if (func.call.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
+                        if (func.call.body.items.len < 1) return error.InterpreterFuncNoBody;
+                        func.interpreter.parent = self;
+                        for (func.call.params.items) |param, i| switch (param) {
+                            .identifier => |identifier| try func.interpreter.scope.put(identifier.items, try func.interpreter.eval(list.items[i + 1])),
                             else => return error.InterpreterFuncInvalidParameter,
                         };
-                        for (func.body.items[0 .. func.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return try self.clone(try sub_interpreter.eval(func.body.items[func.body.items.len - 1]), true);
+                        for (func.call.body.items[0 .. func.call.body.items.len - 1]) |body_expr| _ = try func.interpreter.eval(body_expr);
+                        const result = try self.clone(try func.interpreter.eval(func.call.body.items[func.call.body.items.len - 1]));
+                        func.interpreter.parent = null;
+                        return result;
                     },
                     .macro => |macro| {
                         if (macro.params.items.len != list.items.len - 1) return error.InterpreterMacroParameterMismatch;
@@ -159,7 +165,7 @@ pub const LispInterpreter = struct {
                             else => return error.InterpreterMacroInvalidParameter,
                         };
                         for (macro.body.items[0 .. macro.body.items.len - 1]) |body_expr| _ = try sub_interpreter.eval(body_expr);
-                        return try self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]), true);
+                        return try self.clone(try sub_interpreter.eval(macro.body.items[macro.body.items.len - 1]));
                     },
                     else => return error.InterpreterNoSuchFunction,
                 }
@@ -185,71 +191,72 @@ pub const LispInterpreter = struct {
         return expr;
     }
 
-    pub fn clone(self: *LispInterpreter, expr: LispExpr, steal: bool) anyerror!LispExpr {
+    pub fn clone(self: *LispInterpreter, expr: LispExpr) anyerror!LispExpr {
         switch (expr) {
             .number, .t, .nil, .native_func, .native_macro => return expr,
+
             .string, .identifier => |string| {
                 var copy = try self.allocator.create(std.ArrayList(u8));
                 errdefer self.allocator.destroy(copy);
-                if (steal) {
-                    copy.* = std.ArrayList(u8).fromOwnedSlice(string.allocator, string.toOwnedSlice());
-                } else {
-                    copy.* = std.ArrayList(u8).init(self.allocator);
-                    errdefer copy.deinit();
-                    try copy.appendSlice(string.items);
-                }
+                copy.* = std.ArrayList(u8).init(self.allocator);
+                errdefer copy.deinit();
+                try copy.appendSlice(string.items);
                 switch (expr) {
                     .string => return self.store(LispExpr{ .string = copy }),
                     .identifier => return self.store(LispExpr{ .identifier = copy }),
                     else => unreachable,
                 }
             },
+
             .list => |list| {
                 var copy = try self.allocator.create(std.ArrayList(LispExpr));
                 errdefer self.allocator.destroy(copy);
-                if (steal) {
-                    copy.* = std.ArrayList(LispExpr).fromOwnedSlice(list.allocator, list.toOwnedSlice());
-                    var i: usize = 0;
-                    while (i < copy.items.len) : (i += 1) {
-                        copy.items[i] = try self.clone(copy.items[i], true);
-                    }
-                } else {
-                    copy.* = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len);
-                    errdefer copy.deinit();
-                    for (list.items) |branch| try copy.append(try self.clone(branch, false));
-                }
+                copy.* = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len);
+                errdefer copy.deinit();
+                for (list.items) |branch| try copy.append(try self.clone(branch));
                 return self.store(LispExpr{ .list = copy });
             },
-            .func, .macro => |call| {
+
+            .macro => |call| {
                 var copy = try self.allocator.create(LispCall);
                 errdefer self.allocator.destroy(copy);
-                if (steal) {
-                    copy.params = std.ArrayList(LispExpr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());
-                    var i: usize = 0;
-                    while (i < copy.params.items.len) : (i += 1) {
-                        copy.params.items[i] = try self.clone(copy.params.items[i], true);
-                    }
-                } else {
-                    copy.params = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.params.items.len);
-                    errdefer copy.params.deinit();
-                    for (call.params.items) |branch| try copy.params.append(try self.clone(branch, false));
-                }
-                if (steal) {
-                    copy.body = std.ArrayList(LispExpr).fromOwnedSlice(call.body.allocator, call.body.toOwnedSlice());
-                    var i: usize = 0;
-                    while (i < copy.body.items.len) : (i += 1) {
-                        copy.body.items[i] = try self.clone(copy.body.items[i], true);
-                    }
-                } else {
-                    copy.body = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.body.items.len);
-                    errdefer copy.body.deinit();
-                    for (call.body.items) |branch| try copy.body.append(try self.clone(branch, false));
-                }
-                switch (expr) {
-                    .func => return self.store(LispExpr{ .func = copy }),
-                    .macro => return self.store(LispExpr{ .macro = copy }),
-                    else => unreachable,
-                }
+
+                copy.params = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.params.items.len);
+                errdefer copy.params.deinit();
+                for (call.params.items) |branch| try copy.params.append(try self.clone(branch));
+
+                copy.body = try std.ArrayList(LispExpr).initCapacity(self.allocator, call.body.items.len);
+                errdefer copy.body.deinit();
+                for (call.body.items) |branch| try copy.body.append(try self.clone(branch));
+
+                return self.store(LispExpr{ .macro = copy });
+            },
+
+            .func => |closure| {
+                var copy = try self.allocator.create(LispClosure);
+                errdefer self.allocator.destroy(copy);
+
+                copy.call.params = try std.ArrayList(LispExpr).initCapacity(self.allocator, closure.call.params.items.len);
+                errdefer copy.call.params.deinit();
+                for (closure.call.params.items) |branch| try copy.call.params.append(try self.clone(branch));
+
+                copy.call.body = try std.ArrayList(LispExpr).initCapacity(self.allocator, closure.call.body.items.len);
+                errdefer copy.call.body.deinit();
+                for (closure.call.body.items) |branch| try copy.call.body.append(try self.clone(branch));
+
+                copy.interpreter.allocator = self.allocator;
+                copy.interpreter.parent = closure.interpreter.parent;
+
+                copy.interpreter.heap = try std.ArrayList(LispExpr).initCapacity(self.allocator, closure.interpreter.heap.items.len);
+                errdefer copy.interpreter.heap.deinit();
+                for (closure.interpreter.heap.items) |value| try copy.interpreter.heap.append(try self.clone(value));
+
+                copy.interpreter.scope = std.StringHashMap(LispExpr).init(self.allocator);
+                errdefer copy.interpreter.scope.deinit();
+                var it = closure.interpreter.scope.iterator();
+                while (it.next()) |entry| try copy.interpreter.scope.put(entry.key, try self.clone(entry.value));
+
+                return self.store(LispExpr{ .func = copy });
             },
         }
     }

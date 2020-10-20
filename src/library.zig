@@ -4,11 +4,12 @@ const parse = @import("parse.zig");
 const LispTokenizer = parse.LispTokenizer;
 const LispParser = parse.LispParser;
 
-const interpret = @import("interpret.zig");
-const LispExpr = interpret.LispExpr;
 const LispCall = interpret.LispCall;
-const LispNativeCall = interpret.LispNativeCall;
+const LispClosure = interpret.LispClosure;
+const LispExpr = interpret.LispExpr;
 const LispInterpreter = interpret.LispInterpreter;
+const LispNativeCall = interpret.LispNativeCall;
+const interpret = @import("interpret.zig");
 
 pub fn initCore(allocator: *std.mem.Allocator) !LispInterpreter {
     var core = LispInterpreter.init(allocator, null);
@@ -27,8 +28,9 @@ pub fn initCore(allocator: *std.mem.Allocator) !LispInterpreter {
     try core.scope.put(">=", LispExpr{ .native_func = @ptrToInt(Comparison(.gteq)) });
     try core.scope.put("print", LispExpr{ .native_func = @ptrToInt(print) });
     try core.scope.put("let", LispExpr{ .native_macro = @ptrToInt(let) });
-    try core.scope.put("func", LispExpr{ .native_macro = @ptrToInt(Callable(.func).call) });
-    try core.scope.put("macro", LispExpr{ .native_macro = @ptrToInt(Callable(.macro).call) });
+    try core.scope.put("set", LispExpr{ .native_macro = @ptrToInt(set) });
+    try core.scope.put("func", LispExpr{ .native_macro = @ptrToInt(func) });
+    try core.scope.put("macro", LispExpr{ .native_macro = @ptrToInt(macro) });
     try core.scope.put("if", LispExpr{ .native_macro = @ptrToInt(@"if") });
     try core.scope.put("while", LispExpr{ .native_macro = @ptrToInt(@"while") });
     try core.scope.put("list", LispExpr{ .native_func = @ptrToInt(list) });
@@ -126,45 +128,80 @@ fn print(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
 
 fn let(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 2) return error.LetInvalidArguments;
-    switch (args[0]) {
-        .identifier => |identifier| {
-            const value = try interpreter.eval(args[1]);
-            try interpreter.scope.put(identifier.items, value);
-            return value;
-        },
-        else => return error.LetNoIdentifier,
-    }
+    if (args[0] != .identifier) return error.LetNoIdentifier;
+    if (interpreter.scope.contains(args[0].identifier.items)) return error.LetIdentifierAlreadyExists;
+    const value = try interpreter.eval(args[1]);
+    try interpreter.scope.put(args[0].identifier.items, value);
+    return value;
 }
 
-const CallableType = enum {
-    func,
-    macro,
-};
-fn Callable(callable_type: CallableType) type {
-    return struct {
-        fn call(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
-            if (args.len < 2) return error.FuncInvalidArguments;
-            if (args[0] != .list) return error.FuncNoParameters;
-            var callable = try interpreter.allocator.create(LispCall);
-            errdefer interpreter.allocator.destroy(callable);
-            callable.params = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args[0].list.items.len);
-            errdefer callable.params.deinit();
-            for (args[0].list.items) |param| {
-                if (param == .identifier) {
-                    try callable.params.append(param);
-                } else {
-                    return error.FuncInvalidParameter;
-                }
-            }
-            callable.body = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len - 1);
-            errdefer callable.body.deinit();
-            for (args[1..]) |expr| try callable.body.append(expr);
-            switch (callable_type) {
-                .func => return try interpreter.store(LispExpr{ .func = callable }),
-                .macro => return try interpreter.store(LispExpr{ .macro = callable }),
-            }
+fn set(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
+    if (args.len != 2) return error.SetInvalidArguments;
+    if (args[0] != .identifier) return error.SetNoIdentifier;
+    if (!interpreter.scope.contains(args[0].identifier.items)) return error.SetNoSuchIdentifer;
+    const value = try interpreter.eval(args[1]);
+    try interpreter.scope.put(args[0].identifier.items, value);
+    return value;
+}
+
+fn macro(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
+    if (args.len < 2) return error.MacroInvalidArguments;
+    if (args[0] != .list) return error.MacroNoParameters;
+
+    var callable = try interpreter.allocator.create(LispCall);
+    errdefer interpreter.allocator.destroy(callable);
+
+    callable.params = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args[0].list.items.len);
+    errdefer callable.params.deinit();
+
+    for (args[0].list.items) |param| {
+        if (param == .identifier) {
+            try callable.params.append(param);
+        } else {
+            return error.MacroInvalidParameter;
         }
-    };
+    }
+
+    callable.body = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len - 1);
+    errdefer callable.body.deinit();
+
+    for (args[1..]) |expr| try callable.body.append(expr);
+
+    return try interpreter.store(LispExpr{ .macro = callable });
+}
+
+fn func(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
+    if (args.len < 3) return error.FuncInvalidArguments;
+    if (args[0] != .list) return error.FuncNoParameters;
+    if (args[1] != .list) return error.FuncNoClosure;
+
+    var closure = try interpreter.allocator.create(LispClosure);
+    errdefer interpreter.allocator.destroy(closure);
+
+    closure.call.params = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args[0].list.items.len);
+    errdefer closure.call.params.deinit();
+
+    for (args[0].list.items) |param| {
+        if (param != .identifier) return error.FuncInvalidParameter;
+        try closure.call.params.append(param);
+    }
+
+    closure.interpreter = LispInterpreter.init(interpreter.allocator, null);
+    errdefer closure.interpreter.deinit();
+    for (args[1].list.items) |captured| {
+        if (captured != .identifier) return error.FuncInvalidParameter;
+        if (interpreter.get(captured.identifier.items)) |value| {
+            try closure.interpreter.scope.put(captured.identifier.items, try closure.interpreter.clone(value));
+        } else {
+            return error.FuncCaptureNoSuchIdentifier;
+        }
+    }
+    errdefer closure.interpreter.deinit();
+
+    closure.call.body = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len - 1);
+    errdefer closure.call.body.deinit();
+    for (args[2..]) |expr| try closure.call.body.append(expr);
+    return try interpreter.store(LispExpr{ .func = closure });
 }
 
 fn @"if"(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
@@ -227,5 +264,5 @@ fn pop(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
 
 fn clone(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len != 1) return error.CloneInvalidArguments;
-    return interpreter.clone(args[0], false);
+    return interpreter.clone(args[0]);
 }
