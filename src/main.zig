@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const parse = @import("parse.zig");
+const LispToken = parse.LispToken;
 const LispTokenizer = parse.LispTokenizer;
 const LispParser = parse.LispParser;
 
@@ -30,14 +31,23 @@ pub fn main() !void {
 fn run_file(allocator: *std.mem.Allocator, interpreter: *LispInterpreter, path: []const u8) !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const len = try file.getEndPos();
-    var source = std.ArrayList(u8).init(allocator);
+
+    var source = blk: {
+        var file = try std.fs.cwd().openFile(path, .{ .read = true });
+        defer file.close();
+
+        var source = std.ArrayList(u8).init(allocator);
+
+        const len = try file.getEndPos();
+        try file.reader().readAllArrayList(&source, len);
+
+        break :blk source;
+    };
     defer source.deinit();
-    try file.reader().readAllArrayList(&source, len);
+
     var tokenizer = LispTokenizer.init(source.items);
-    var tokens = std.ArrayList(parse.Token).init(allocator);
+    var tokens = std.ArrayList(LispToken).init(allocator);
+
     defer tokens.deinit();
     while (try tokenizer.next()) |token| try tokens.append(token);
     var parser = LispParser.init(interpreter, source.items, tokens.items);
@@ -88,7 +98,7 @@ fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
         }
 
         var tokenizer = LispTokenizer.init(source.items);
-        var tokens = std.ArrayList(parse.Token).init(allocator);
+        var tokens = std.ArrayList(LispToken).init(allocator);
         defer tokens.deinit();
         while (try tokenizer.next()) |token| try tokens.append(token);
         var parser = LispParser.init(interpreter, source.items, tokens.items);

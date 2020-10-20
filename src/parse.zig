@@ -3,7 +3,7 @@ const interpret = @import("interpret.zig");
 const LispExpr = interpret.LispExpr;
 const LispInterpreter = interpret.LispInterpreter;
 
-pub const Token = struct {
+pub const LispToken = struct {
     id: Id,
     start: usize,
     end: usize,
@@ -45,10 +45,10 @@ pub const LispTokenizer = struct {
         close_paren,
     };
 
-    pub fn next(self: *LispTokenizer) !?Token {
+    pub fn next(self: *LispTokenizer) !?LispToken {
         const start_index = self.index;
         var state = State.start;
-        var result = Token{
+        var result = LispToken{
             .id = undefined,
             .start = start_index,
             .end = undefined,
@@ -187,10 +187,10 @@ pub const LispTokenizer = struct {
 pub const LispParser = struct {
     interpreter: *LispInterpreter,
     source: []const u8,
-    tokens: []Token,
+    tokens: []LispToken,
     index: usize,
 
-    pub fn init(interpreter: *LispInterpreter, source: []const u8, tokens: []Token) LispParser {
+    pub fn init(interpreter: *LispInterpreter, source: []const u8, tokens: []LispToken) LispParser {
         return LispParser{
             .interpreter = interpreter,
             .source = source,
