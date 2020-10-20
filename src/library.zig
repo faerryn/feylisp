@@ -6,8 +6,8 @@ const LispParser = parse.LispParser;
 
 const interpret = @import("interpret.zig");
 const LispExpr = interpret.LispExpr;
-const Call = interpret.Call;
-const NativeCall = interpret.NativeCall;
+const LispCall = interpret.LispCall;
+const LispNativeCall = interpret.LispNativeCall;
 const LispInterpreter = interpret.LispInterpreter;
 
 pub fn initCore(allocator: *std.mem.Allocator) !LispInterpreter {
@@ -41,7 +41,7 @@ pub fn initCore(allocator: *std.mem.Allocator) !LispInterpreter {
 }
 
 const OperationType = enum { add, sub, mul, div };
-fn Operation(comptime op: OperationType) NativeCall {
+fn Operation(comptime op: OperationType) LispNativeCall {
     const impl = switch (op) {
         .add, .mul => struct {
             fn inner(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
@@ -88,7 +88,7 @@ fn Operation(comptime op: OperationType) NativeCall {
 }
 
 const ComparisonType = enum { eq, neq, gt, gteq, lt, lteq };
-fn Comparison(comptime comp: ComparisonType) NativeCall {
+fn Comparison(comptime comp: ComparisonType) LispNativeCall {
     const impl = struct {
         fn inner(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
             const first = switch (args[0]) {
@@ -145,7 +145,7 @@ fn Callable(callable_type: CallableType) type {
         fn call(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
             if (args.len < 2) return error.FuncInvalidArguments;
             if (args[0] != .list) return error.FuncNoParameters;
-            var callable = try interpreter.allocator.create(Call);
+            var callable = try interpreter.allocator.create(LispCall);
             errdefer interpreter.allocator.destroy(callable);
             callable.params = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args[0].list.items.len);
             errdefer callable.params.deinit();

@@ -1,3 +1,4 @@
+; just a memoized fibbonacci machine, nothing to see here
 (let mem (list 0 1))
 (let fib
   (func (n)

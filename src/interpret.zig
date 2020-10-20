@@ -1,11 +1,11 @@
 const std = @import("std");
 
-pub const Call = struct {
+pub const LispCall = struct {
     params: std.ArrayList(LispExpr),
     body: std.ArrayList(LispExpr),
 };
 
-pub const NativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;
+pub const LispNativeCall = fn (*LispInterpreter, []LispExpr) anyerror!LispExpr;
 
 pub const LispExpr = union(enum) {
     list: *std.ArrayList(LispExpr),
@@ -14,8 +14,8 @@ pub const LispExpr = union(enum) {
     number: isize,
     t,
     nil,
-    func: *Call,
-    macro: *Call,
+    func: *LispCall,
+    macro: *LispCall,
     native_func: usize,
     native_macro: usize,
 
@@ -130,12 +130,12 @@ pub const LispInterpreter = struct {
                 if (list.items.len == 0) return expr;
                 const called = try self.eval(list.items[0]);
                 switch (called) {
-                    .native_macro => |native_call| return try @intToPtr(NativeCall, native_call)(self, list.items[1..]),
+                    .native_macro => |native_call| return try @intToPtr(LispNativeCall, native_call)(self, list.items[1..]),
                     .native_func => |native_call| {
                         var args_list = try std.ArrayList(LispExpr).initCapacity(self.allocator, list.items.len - 1);
                         defer args_list.deinit();
                         for (list.items[1..]) |arg| try args_list.append(try self.eval(arg));
-                        return try @intToPtr(NativeCall, native_call)(self, args_list.items);
+                        return try @intToPtr(LispNativeCall, native_call)(self, args_list.items);
                     },
                     .func => |func| {
                         if (func.params.items.len != list.items.len - 1) return error.InterpreterFuncParameterMismatch;
@@ -221,7 +221,7 @@ pub const LispInterpreter = struct {
                 return self.store(LispExpr{ .list = copy });
             },
             .func, .macro => |call| {
-                var copy = try self.allocator.create(Call);
+                var copy = try self.allocator.create(LispCall);
                 errdefer self.allocator.destroy(copy);
                 if (steal) {
                     copy.params = std.ArrayList(LispExpr).fromOwnedSlice(call.params.allocator, call.params.toOwnedSlice());

@@ -52,7 +52,7 @@ fn run_file(allocator: *std.mem.Allocator, interpreter: *LispInterpreter, path: 
     while (try tokenizer.next()) |token| try tokens.append(token);
     var parser = LispParser.init(interpreter, source.items, tokens.items);
     while (try parser.next()) |expr| {
-        if (try interpreter.eval(expr)) {} else |err| try stderr.print("{}\n", .{err});
+        _ = interpreter.eval(expr) catch |err| try stderr.print("{}\n", .{err});
     }
 }
 
