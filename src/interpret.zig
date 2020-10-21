@@ -259,15 +259,13 @@ pub const LispInterpreter = struct {
                 errdefer copy.call.body.deinit();
                 for (closure.call.body.items) |branch| try copy.call.body.append(try self.clone(branch));
 
-                copy.interpreter.allocator = self.allocator;
-                copy.interpreter.parent = closure.interpreter.parent;
+                copy.interpreter = LispInterpreter.init(self.allocator, null);
+                errdefer copy.interpreter.deinit();
 
-                copy.interpreter.heap = try std.ArrayList(LispExpr).initCapacity(self.allocator, closure.interpreter.heap.items.len);
-                errdefer copy.interpreter.heap.deinit();
+                try copy.interpreter.heap.ensureCapacity(closure.interpreter.heap.items.len);
                 for (closure.interpreter.heap.items) |value| try copy.interpreter.heap.append(try self.clone(value));
 
-                copy.interpreter.scope = std.StringHashMap(LispExpr).init(self.allocator);
-                errdefer copy.interpreter.scope.deinit();
+                try copy.interpreter.scope.ensureCapacity(closure.interpreter.scope.count());
                 var it = closure.interpreter.scope.iterator();
                 while (it.next()) |entry| try copy.interpreter.scope.put(entry.key, try self.clone(entry.value));
 

@@ -62,7 +62,7 @@ fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
     const stdin = std.io.getStdIn().reader();
 
     repl_loop: while (true) {
-        const PROMPT = " >> ";
+        const PROMPT = ">> ";
         _ = try stdout.write(PROMPT);
 
         var source = std.ArrayList(u8).init(allocator);

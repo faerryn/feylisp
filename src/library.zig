@@ -188,6 +188,7 @@ fn func(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
 
     closure.interpreter = LispInterpreter.init(interpreter.allocator, null);
     errdefer closure.interpreter.deinit();
+
     for (args[1].list.items) |captured| {
         if (captured != .identifier) return error.FuncInvalidParameter;
         if (interpreter.get(captured.identifier.items)) |value| {
@@ -196,11 +197,11 @@ fn func(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
             return error.FuncCaptureNoSuchIdentifier;
         }
     }
-    errdefer closure.interpreter.deinit();
 
     closure.call.body = try std.ArrayList(LispExpr).initCapacity(interpreter.allocator, args.len - 1);
     errdefer closure.call.body.deinit();
     for (args[2..]) |expr| try closure.call.body.append(expr);
+
     return try interpreter.store(LispExpr{ .func = closure });
 }
 
