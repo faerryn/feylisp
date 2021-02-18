@@ -104,9 +104,9 @@ fn repl(allocator: *std.mem.Allocator, interpreter: *LispInterpreter) !void {
         var parser = LispParser.init(interpreter, source.items, tokens.items);
         while (try parser.next()) |expr| {
             if (interpreter.eval(expr)) |result| {
-                try stdout.print("{}\n", .{result});
+                try stdout.print("{s}\n", .{result});
             } else |err| {
-                try stderr.print("{}\n", .{err});
+                try stderr.print("{s}\n", .{err});
             }
         }
     }

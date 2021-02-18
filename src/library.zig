@@ -119,8 +119,8 @@ fn print(interpreter: *LispInterpreter, args: []LispExpr) !LispExpr {
     if (args.len == 0) return error.PrintInvalidArguments;
     for (args) |arg| {
         switch (arg) {
-            .string => |string| try stdout.print("{}", .{string.items}),
-            else => try stdout.print("{}", .{arg}),
+            .string => |string| try stdout.print("{s}", .{string.items}),
+            else => try stdout.print("{s}", .{arg}),
         }
     }
     return args[args.len - 1];

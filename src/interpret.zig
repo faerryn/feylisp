@@ -56,7 +56,7 @@ pub const LispExpr = union(enum) {
                 }
                 _ = try writer.write(")");
             },
-            .identifier => |identifier| try writer.print("{}", .{identifier.items}),
+            .identifier => |identifier| try writer.print("{s}", .{identifier.items}),
             .string => |string| {
                 _ = try writer.write("\"");
                 for (string.items) |c| {
@@ -79,7 +79,7 @@ pub const LispExpr = union(enum) {
                 _ = try writer.write(") (");
                 if (closure.interpreter.scope.count() > 0) {
                     var it = closure.interpreter.scope.iterator();
-                    while (it.next()) |capture| try writer.print("{}={} ", .{capture.key, capture.value});
+                    while (it.next()) |capture| try writer.print("{s}={s} ", .{capture.key, capture.value});
                 }
                 _ = try writer.write(")");
                 if (closure.call.body.items.len > 0) for (closure.call.body.items) |expr| try writer.print("\n{}", .{expr});
