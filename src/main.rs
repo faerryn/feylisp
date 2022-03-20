@@ -17,10 +17,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn factorial() {
     let src = "
-(((lambda r
-    ((lambda f (f f))
-     (lambda f (r (lambda x ((f f) x))))))
-  (lambda f (lambda n (if (zero? n) 1 (* n (f (- n 1)))))))
+(((lambda (r)
+    ((lambda (f) (f f))
+     (lambda (f) (r (lambda (x) ((f f) x))))))
+  (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1)))))))
  5)
 ";
     let exprs = parse(lex(src).unwrap()).unwrap();
@@ -179,8 +179,8 @@ impl std::fmt::Display for Expression {
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(Closure { param, body, env }) => {
-                write!(f, "(lambda {} {}) [{}]", param, body, env)
+            Expression::Closure(Closure { params, body, env }) => {
+                write!(f, "(lambda ({}) {}) [{}]", params, body, env)
             }
         }
     }
@@ -323,7 +323,7 @@ enum ListMonop {
 
 #[derive(Clone, Debug)]
 struct Closure {
-    param: String,
+    params: List,
     body: Box<Expression>,
     env: std::rc::Rc<Environment>,
 }
@@ -386,7 +386,7 @@ enum Environment {
 }
 
 impl Environment {
-    pub fn get(&self, ident: &str) -> Option<&Expression> {
+    fn get(&self, ident: &str) -> Option<&Expression> {
         match self {
             Environment::Cons(key, val, parent) => {
                 if key == ident {
@@ -396,6 +396,33 @@ impl Environment {
                 }
             }
             Environment::Nil => None,
+        }
+    }
+
+    fn create_call_env(
+        caller_env: std::rc::Rc<Environment>,
+        new_env: std::rc::Rc<Environment>,
+        params: List,
+        args: List,
+    ) -> Result<std::rc::Rc<Environment>, EvalError> {
+        match (&params, &args) {
+            (List::Cons(_), List::Cons(_)) => {
+                let (param, params) =
+                    List::head_taillist(params).or(Err(EvalError::MalformedApply))?;
+                let param = match param {
+                    Expression::Symbol(symbol) => Ok(symbol),
+                    _ => Err(EvalError::MalformedApply),
+                }?;
+                let (arg, args) = List::head_taillist(args).or(Err(EvalError::MalformedApply))?;
+                let arg = eval(arg, std::rc::Rc::clone(&caller_env))?;
+
+                let new_env =
+                    std::rc::Rc::new(Environment::Cons(param, arg, std::rc::Rc::clone(&new_env)));
+
+                Environment::create_call_env(caller_env, new_env, params, args)
+            }
+            (List::Nil, List::Nil) => Ok(new_env),
+            _ => Err(EvalError::MalformedApply),
         }
     }
 }
@@ -458,6 +485,7 @@ impl std::error::Error for EvalError {}
 
 fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, EvalError> {
     match expr {
+        // TODO: use reference couting to get ride of this .aclone()
         Expression::Symbol(ref ident) => Ok(env.get(ident).ok_or(EvalError::FreeVariable)?.clone()),
         Expression::List(list) => match list {
             List::Cons(_) => {
@@ -471,16 +499,16 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             Ok(arg)
                         }
                         Builtin::Lambda => {
-                            let (param, rand) =
+                            let (params, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let param = match param {
-                                Expression::Symbol(symbol) => Ok(symbol),
+                            let params = match params {
+                                Expression::List(list) => Ok(list),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
                             let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
                             Ok(Expression::Closure(Closure {
-                                param,
+                                params,
                                 body: Box::new(body),
                                 env: std::rc::Rc::clone(&env),
                             }))
@@ -541,19 +569,13 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                         }
                     },
                     Expression::Closure(Closure {
-                        param,
+                        params,
                         body,
                         env: closure_env,
-                    }) => {
-                        if param == "_" {
-                            eval(*body, closure_env)
-                        } else {
-                            let arg = List::single(rand).or(Err(EvalError::MalformedApply))?;
-                            let arg = eval(arg, std::rc::Rc::clone(&env))?;
-                            let new_env = Environment::Cons(param, arg, closure_env);
-                            eval(*body, std::rc::Rc::new(new_env))
-                        }
-                    }
+                    }) => eval(
+                        *body,
+                        Environment::create_call_env(env, closure_env, params, rand)?,
+                    ),
                     _ => Err(EvalError::MalformedApply),
                 }
             }
