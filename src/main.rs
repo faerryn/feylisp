@@ -1,10 +1,12 @@
+use std::rc::Rc;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let env = std::rc::Rc::new(Environment::default());
+    let env = Rc::new(Environment::default());
 
     for arg in std::env::args().skip(1) {
         for expr in parse(lex(&std::fs::read_to_string(arg)?)?)? {
             let orig = format!("{}", expr);
-            match eval(expr, std::rc::Rc::clone(&env)) {
+            match eval(expr, Rc::clone(&env)) {
                 Ok(expr) => println!("{} -> {}", orig, expr),
                 Err(err) => println!("{}: {}", orig, err),
             }
@@ -24,7 +26,7 @@ fn factorial() {
     let exprs = parse(lex(src).unwrap()).unwrap();
     assert_eq!(exprs.len(), 1);
     let expr = exprs.into_iter().next().unwrap();
-    let result = eval(expr, std::rc::Rc::new(Environment::default())).unwrap();
+    let result = eval(expr, Rc::new(Environment::default())).unwrap();
     assert!(matches!(result, Expression::Number(120)));
 }
 
@@ -185,14 +187,8 @@ impl std::fmt::Display for Expression {
 }
 
 #[derive(Clone, Debug)]
-struct Cons {
-    head: Expression,
-    tail: Expression,
-}
-
-#[derive(Clone, Debug)]
 enum List {
-    Cons(Box<Cons>),
+    Cons(Box<Expression>, Box<Expression>),
     Nil,
 }
 
@@ -210,7 +206,7 @@ impl std::error::Error for ListError {}
 impl List {
     fn head_tail(list: List) -> Result<(Expression, Expression), ListError> {
         match list {
-            List::Cons(cons) => Ok((cons.head, cons.tail)),
+            List::Cons(head, tail) => Ok((*head, *tail)),
             List::Nil => Err(ListError),
         }
     }
@@ -233,10 +229,7 @@ impl From<Vec<Expression>> for List {
         let mut result = List::Nil;
 
         for expr in vec.into_iter().rev() {
-            result = List::Cons(Box::new(Cons {
-                head: expr,
-                tail: Expression::List(result),
-            }));
+            result = List::Cons(Box::new(expr), Box::new(Expression::List(result)));
         }
 
         result
@@ -246,14 +239,14 @@ impl From<Vec<Expression>> for List {
 impl std::fmt::Display for List {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            List::Cons(cons) => {
-                write!(f, "{}", cons.head)?;
-                match &cons.tail {
+            List::Cons(head, tail) => {
+                write!(f, "{}", head)?;
+                match &**tail {
                     Expression::List(tail) => match tail {
-                        List::Cons(_) => write!(f, " {}", tail),
+                        List::Cons(_, _) => write!(f, " {}", tail),
                         List::Nil => Ok(()),
                     },
-                    _ => write!(f, " . {}", cons.tail),
+                    _ => write!(f, " . {}", tail),
                 }
             }
             List::Nil => Ok(()),
@@ -349,7 +342,7 @@ enum ListMonop {
 struct Closure {
     params: List,
     body: Box<Expression>,
-    env: std::rc::Rc<Environment>,
+    env: Rc<Environment>,
 }
 
 #[derive(Debug)]
@@ -405,7 +398,7 @@ fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
 
 #[derive(Debug)]
 enum Environment {
-    Cons(String, Expression, std::rc::Rc<Environment>),
+    Cons(String, Expression, Rc<Environment>),
     Nil,
 }
 
@@ -446,11 +439,7 @@ impl Default for Environment {
             ("let", Builtin::Let),
             ("eval", Builtin::Eval),
         ] {
-            env = Environment::Cons(
-                key.to_owned(),
-                Expression::Builtin(val),
-                std::rc::Rc::new(env),
-            );
+            env = Environment::Cons(key.to_owned(), Expression::Builtin(val), Rc::new(env));
         }
         env
     }
@@ -486,14 +475,14 @@ impl std::fmt::Display for EvalError {
 
 impl std::error::Error for EvalError {}
 
-fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, EvalError> {
+fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError> {
     match expr {
-        // TODO: use reference couting to get ride of this .aclone()
+        // TODO: use reference couting to get ride of this .clone()
         Expression::Symbol(ref ident) => Ok(env.get(ident).ok_or(EvalError::FreeVariable)?.clone()),
         Expression::List(list) => match list {
-            List::Cons(_) => {
+            List::Cons(_, _) => {
                 let (rator, rand) = List::head_taillist(list).or(Err(EvalError::MalformedApply))?;
-                let rator = eval(rator, std::rc::Rc::clone(&env))?;
+                let rator = eval(rator, Rc::clone(&env))?;
 
                 match rator {
                     Expression::Builtin(builtin) => match builtin {
@@ -513,7 +502,7 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             Ok(Expression::Closure(Closure {
                                 params,
                                 body: Box::new(body),
-                                env: std::rc::Rc::clone(&env),
+                                env: Rc::clone(&env),
                             }))
                         }
                         Builtin::If => {
@@ -524,10 +513,10 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             let unless =
                                 List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
-                            if let Expression::Bool(true) = eval(cond, std::rc::Rc::clone(&env))? {
-                                eval(when, std::rc::Rc::clone(&env))
+                            if let Expression::Bool(true) = eval(cond, Rc::clone(&env))? {
+                                eval(when, Rc::clone(&env))
                             } else {
-                                eval(unless, std::rc::Rc::clone(&env))
+                                eval(unless, Rc::clone(&env))
                             }
                         }
                         Builtin::TestMonop(op) => {
@@ -541,12 +530,12 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                         Builtin::NumBinop(op) => {
                             let (rhs, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let rhs = match eval(rhs, std::rc::Rc::clone(&env))? {
+                            let rhs = match eval(rhs, Rc::clone(&env))? {
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
                             let lhs = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let lhs = match eval(lhs, std::rc::Rc::clone(&env))? {
+                            let lhs = match eval(lhs, Rc::clone(&env))? {
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
@@ -579,23 +568,23 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                         Builtin::Cons => {
                             let (head, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let head = eval(head, std::rc::Rc::clone(&env))?;
+                            let head = eval(head, Rc::clone(&env))?;
                             let tail = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let tail = eval(tail, env)?;
-                            Ok(Expression::List(List::Cons(Box::new(Cons { head, tail }))))
+                            Ok(Expression::List(List::Cons(Box::new(head), Box::new(tail))))
                         }
                         Builtin::List => {
                             fn list_eval(
-                                env: std::rc::Rc<Environment>,
+                                env: Rc<Environment>,
                                 list: List,
                             ) -> Result<List, EvalError> {
                                 match list {
-                                    List::Cons(_) => {
+                                    List::Cons(_, _) => {
                                         let (head, tail) = List::head_taillist(list)
                                             .or(Err(EvalError::Malformed(Builtin::List)))?;
-                                        let head = eval(head, std::rc::Rc::clone(&env))?;
+                                        let head = eval(head, Rc::clone(&env))?;
                                         let tail = Expression::List(list_eval(env, tail)?);
-                                        Ok(List::Cons(Box::new(Cons { head, tail })))
+                                        Ok(List::Cons(Box::new(head), Box::new(tail)))
                                     }
                                     List::Nil => Ok(List::Nil),
                                 }
@@ -611,17 +600,17 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             }?;
                             let (value, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let value = eval(value, std::rc::Rc::clone(&env))?;
+                            let value = eval(value, Rc::clone(&env))?;
 
                             let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
-                            let new_env = std::rc::Rc::new(Environment::Cons(name, value, env));
+                            let new_env = Rc::new(Environment::Cons(name, value, env));
 
                             eval(body, new_env)
                         }
                         Builtin::Eval => {
                             let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let arg = eval(arg, std::rc::Rc::clone(&env))?;
+                            let arg = eval(arg, Rc::clone(&env))?;
                             eval(arg, env)
                         }
                     },
@@ -631,13 +620,13 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                         env: closure_env,
                     }) => {
                         fn create_call_env(
-                            caller_env: std::rc::Rc<Environment>,
-                            new_env: std::rc::Rc<Environment>,
+                            caller_env: Rc<Environment>,
+                            new_env: Rc<Environment>,
                             params: List,
                             args: List,
-                        ) -> Result<std::rc::Rc<Environment>, EvalError> {
+                        ) -> Result<Rc<Environment>, EvalError> {
                             match (&params, &args) {
-                                (List::Cons(_), List::Cons(_)) => {
+                                (List::Cons(_, _), List::Cons(_, _)) => {
                                     let (param, params) = List::head_taillist(params)
                                         .or(Err(EvalError::MalformedApply))?;
                                     let param = match param {
@@ -646,13 +635,10 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                     }?;
                                     let (arg, args) = List::head_taillist(args)
                                         .or(Err(EvalError::MalformedApply))?;
-                                    let arg = eval(arg, std::rc::Rc::clone(&caller_env))?;
+                                    let arg = eval(arg, Rc::clone(&caller_env))?;
 
-                                    let new_env = std::rc::Rc::new(Environment::Cons(
-                                        param,
-                                        arg,
-                                        std::rc::Rc::clone(&new_env),
-                                    ));
+                                    let new_env =
+                                        Rc::new(Environment::Cons(param, arg, Rc::clone(&new_env)));
 
                                     create_call_env(caller_env, new_env, params, args)
                                 }
