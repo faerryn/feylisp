@@ -269,8 +269,10 @@ enum Builtin {
     Lambda,
     If,
     TestMonop(TestMonop),
-    ArithBinop(ArithBinop),
+    NumBinop(NumBinop),
     ListMonop(ListMonop),
+    Cons,
+    List,
 }
 
 impl std::fmt::Display for Builtin {
@@ -286,16 +288,24 @@ impl std::fmt::Display for Builtin {
                     TestMonop::Zero => "zero?",
                     TestMonop::Nil => "nil?",
                 },
-                Builtin::ArithBinop(op) => match op {
-                    ArithBinop::Add => "+",
-                    ArithBinop::Sub => "-",
-                    ArithBinop::Mul => "*",
-                    ArithBinop::Div => "/",
+                Builtin::NumBinop(op) => match op {
+                    NumBinop::ArBinop(op) => match op {
+                        ArBinop::Add => "+",
+                        ArBinop::Sub => "-",
+                        ArBinop::Mul => "*",
+                        ArBinop::Div => "/",
+                    },
+                    NumBinop::OrdBinop(op) => match op {
+                        OrdBinop::Eql => "=",
+                        OrdBinop::Lt => "<",
+                    },
                 },
                 Builtin::ListMonop(op) => match op {
                     ListMonop::Head => "hd",
                     ListMonop::Tail => "tl",
                 },
+                Builtin::Cons => "cons",
+                Builtin::List => "list",
             }
         )
     }
@@ -308,11 +318,23 @@ enum TestMonop {
 }
 
 #[derive(Copy, Clone, Debug)]
-enum ArithBinop {
+enum NumBinop {
+    ArBinop(ArBinop),
+    OrdBinop(OrdBinop),
+}
+
+#[derive(Copy, Clone, Debug)]
+enum ArBinop {
     Add,
     Sub,
     Mul,
     Div,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum OrdBinop {
+    Eql,
+    Lt,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -398,33 +420,6 @@ impl Environment {
             Environment::Nil => None,
         }
     }
-
-    fn create_call_env(
-        caller_env: std::rc::Rc<Environment>,
-        new_env: std::rc::Rc<Environment>,
-        params: List,
-        args: List,
-    ) -> Result<std::rc::Rc<Environment>, EvalError> {
-        match (&params, &args) {
-            (List::Cons(_), List::Cons(_)) => {
-                let (param, params) =
-                    List::head_taillist(params).or(Err(EvalError::MalformedApply))?;
-                let param = match param {
-                    Expression::Symbol(symbol) => Ok(symbol),
-                    _ => Err(EvalError::MalformedApply),
-                }?;
-                let (arg, args) = List::head_taillist(args).or(Err(EvalError::MalformedApply))?;
-                let arg = eval(arg, std::rc::Rc::clone(&caller_env))?;
-
-                let new_env =
-                    std::rc::Rc::new(Environment::Cons(param, arg, std::rc::Rc::clone(&new_env)));
-
-                Environment::create_call_env(caller_env, new_env, params, args)
-            }
-            (List::Nil, List::Nil) => Ok(new_env),
-            _ => Err(EvalError::MalformedApply),
-        }
-    }
 }
 
 impl Default for Environment {
@@ -436,12 +431,16 @@ impl Default for Environment {
             ("if", Builtin::If),
             ("zero?", Builtin::TestMonop(TestMonop::Zero)),
             ("nil?", Builtin::TestMonop(TestMonop::Nil)),
-            ("+", Builtin::ArithBinop(ArithBinop::Add)),
-            ("-", Builtin::ArithBinop(ArithBinop::Sub)),
-            ("*", Builtin::ArithBinop(ArithBinop::Mul)),
-            ("/", Builtin::ArithBinop(ArithBinop::Div)),
-            ("hd", Builtin::ListMonop(ListMonop::Head)),
-            ("tl", Builtin::ListMonop(ListMonop::Tail)),
+            ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
+            ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
+            ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
+            ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
+            ("=", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
+            ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
+            ("car", Builtin::ListMonop(ListMonop::Head)),
+            ("cdr", Builtin::ListMonop(ListMonop::Tail)),
+            ("cons", Builtin::Cons),
+            ("list", Builtin::List),
         ] {
             env = Environment::Cons(
                 key.to_owned(),
@@ -463,7 +462,7 @@ impl std::fmt::Display for Environment {
                     Environment::Nil => Ok(()),
                 }
             }
-            Environment::Nil => todo!(),
+            Environment::Nil => Ok(()),
         }
     }
 }
@@ -535,7 +534,7 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                 TestMonop::Nil => matches!(arg, Expression::List(List::Nil)),
                             }))
                         }
-                        Builtin::ArithBinop(op) => {
+                        Builtin::NumBinop(op) => {
                             let (rhs, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let rhs = match eval(rhs, std::rc::Rc::clone(&env))? {
@@ -547,12 +546,18 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
-                            Ok(Expression::Number(match op {
-                                ArithBinop::Add => rhs + lhs,
-                                ArithBinop::Sub => rhs - lhs,
-                                ArithBinop::Mul => rhs * lhs,
-                                ArithBinop::Div => rhs / lhs,
-                            }))
+                            Ok(match op {
+                                NumBinop::ArBinop(op) => Expression::Number(match op {
+                                    ArBinop::Add => rhs + lhs,
+                                    ArBinop::Sub => rhs - lhs,
+                                    ArBinop::Mul => rhs * lhs,
+                                    ArBinop::Div => rhs / lhs,
+                                }),
+                                NumBinop::OrdBinop(op) => Expression::Bool(match op {
+                                    OrdBinop::Eql => rhs == lhs,
+                                    OrdBinop::Lt => rhs < lhs,
+                                }),
+                            })
                         }
                         Builtin::ListMonop(op) => {
                             let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
@@ -567,15 +572,71 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                 ListMonop::Tail => Ok(tail),
                             }
                         }
+                        Builtin::Cons => {
+                            let (head, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let head = eval(head, std::rc::Rc::clone(&env))?;
+                            let tail = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let tail = eval(tail, env)?;
+                            Ok(Expression::List(List::Cons(Box::new(Cons { head, tail }))))
+                        }
+                        Builtin::List => {
+                            fn list_eval(
+                                env: std::rc::Rc<Environment>,
+                                list: List,
+                            ) -> Result<List, EvalError> {
+                                match list {
+                                    List::Cons(_) => {
+                                        let (head, tail) = List::head_taillist(list)
+                                            .or(Err(EvalError::Malformed(Builtin::List)))?;
+                                        let head = eval(head, std::rc::Rc::clone(&env))?;
+                                        let tail = Expression::List(list_eval(env, tail)?);
+                                        Ok(List::Cons(Box::new(Cons { head, tail })))
+                                    }
+                                    List::Nil => Ok(List::Nil),
+                                }
+                            }
+                            Ok(Expression::List(list_eval(env, rand)?))
+                        }
                     },
                     Expression::Closure(Closure {
                         params,
                         body,
                         env: closure_env,
-                    }) => eval(
-                        *body,
-                        Environment::create_call_env(env, closure_env, params, rand)?,
-                    ),
+                    }) => {
+                        fn create_call_env(
+                            caller_env: std::rc::Rc<Environment>,
+                            new_env: std::rc::Rc<Environment>,
+                            params: List,
+                            args: List,
+                        ) -> Result<std::rc::Rc<Environment>, EvalError> {
+                            match (&params, &args) {
+                                (List::Cons(_), List::Cons(_)) => {
+                                    let (param, params) = List::head_taillist(params)
+                                        .or(Err(EvalError::MalformedApply))?;
+                                    let param = match param {
+                                        Expression::Symbol(symbol) => Ok(symbol),
+                                        _ => Err(EvalError::MalformedApply),
+                                    }?;
+                                    let (arg, args) = List::head_taillist(args)
+                                        .or(Err(EvalError::MalformedApply))?;
+                                    let arg = eval(arg, std::rc::Rc::clone(&caller_env))?;
+
+                                    let new_env = std::rc::Rc::new(Environment::Cons(
+                                        param,
+                                        arg,
+                                        std::rc::Rc::clone(&new_env),
+                                    ));
+
+                                    create_call_env(caller_env, new_env, params, args)
+                                }
+                                (List::Nil, List::Nil) => Ok(new_env),
+                                _ => Err(EvalError::MalformedApply),
+                            }
+                        }
+
+                        eval(*body, create_call_env(env, closure_env, params, rand)?)
+                    }
                     _ => Err(EvalError::MalformedApply),
                 }
             }
