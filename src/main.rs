@@ -56,9 +56,9 @@ mod tests {
 
 #[derive(Debug)]
 enum PipelineError {
-    LexError(LexError),
-    ParseError(ParseError),
-    EvalError(EvalError),
+    Lex(LexError),
+    Parse(ParseError),
+    Eval(EvalError),
 }
 
 impl std::fmt::Display for PipelineError {
@@ -73,13 +73,12 @@ fn pipeline(
     src: &str,
     mut env: Environment,
 ) -> Result<(Vec<Expression>, Environment), PipelineError> {
-    let exprs = parse(lex(src).or_else(|err| Err(PipelineError::LexError(err)))?)
-        .or_else(|err| Err(PipelineError::ParseError(err)))?;
+    let exprs = parse(lex(src).map_err(PipelineError::Lex)?).map_err(PipelineError::Parse)?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
     for expr in exprs {
-        let (expr, new_env) = eval(expr, env).or_else(|err| Err(PipelineError::EvalError(err)))?;
+        let (expr, new_env) = eval(expr, env).map_err(PipelineError::Eval)?;
         env = new_env;
         result.push(expr);
     }
@@ -704,11 +703,8 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                         let value = List::single(head)
                                             .or(Err(EvalError::Malformed(Builtin::Let)))?;
                                         let (value, caller_env) = eval(value, caller_env)?;
-                                        let new_env = Environment::Cons(
-                                            name,
-                                            value,
-                                            Box::new(new_env.clone()),
-                                        );
+                                        let new_env =
+                                            Environment::Cons(name, value, Box::new(new_env));
                                         create_let_env(tail, new_env, caller_env)
                                     }
                                     List::Nil => Ok((new_env, caller_env)),
@@ -761,8 +757,7 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                         .or(Err(EvalError::MalformedApply))?;
                                     let (arg, caller_env) = eval(arg, caller_env)?;
 
-                                    let new_env =
-                                        Environment::Cons(param, arg, Box::new(new_env.clone()));
+                                    let new_env = Environment::Cons(param, arg, Box::new(new_env));
 
                                     create_call_env(params, args, new_env, caller_env)
                                 }
@@ -771,8 +766,7 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                             }
                         }
 
-                        let (new_env, env) =
-                            create_call_env(params, rand, *closure_env.clone(), env)?;
+                        let (new_env, env) = create_call_env(params, rand, *closure_env, env)?;
                         let (result, _) = eval(*body, new_env)?;
                         Ok((result, env))
                     }
