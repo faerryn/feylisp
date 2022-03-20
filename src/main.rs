@@ -273,6 +273,7 @@ enum Builtin {
     ListMonop(ListMonop),
     Cons,
     List,
+    Let,
 }
 
 impl std::fmt::Display for Builtin {
@@ -306,6 +307,7 @@ impl std::fmt::Display for Builtin {
                 },
                 Builtin::Cons => "cons",
                 Builtin::List => "list",
+                Builtin::Let => "let",
             }
         )
     }
@@ -441,6 +443,7 @@ impl Default for Environment {
             ("cdr", Builtin::ListMonop(ListMonop::Tail)),
             ("cons", Builtin::Cons),
             ("list", Builtin::List),
+            ("let", Builtin::Let),
         ] {
             env = Environment::Cons(
                 key.to_owned(),
@@ -597,6 +600,23 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                 }
                             }
                             Ok(Expression::List(list_eval(env, rand)?))
+                        }
+                        Builtin::Let => {
+                            let (name, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let name = match name {
+                                Expression::Symbol(symbole) => Ok(symbole),
+                                _ => Err(EvalError::Malformed(builtin)),
+                            }?;
+                            let (value, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let value = eval(value, std::rc::Rc::clone(&env))?;
+
+                            let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
+
+                            let new_env = std::rc::Rc::new(Environment::Cons(name, value, env));
+
+                            eval(body, new_env)
                         }
                     },
                     Expression::Closure(Closure {
