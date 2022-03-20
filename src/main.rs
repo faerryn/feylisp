@@ -27,6 +27,17 @@ fn factorial() {
     assert!(matches!(result.as_deref(), Ok([Expression::Number(120)])));
 }
 
+#[test]
+fn fibonnaci() {
+    let src = "
+(define Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
+(define fib (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2)))))))
+((Y fib) 10)
+";
+    let result = pipeline(src, Environment::default());
+    assert!(matches!(result.as_deref(), Ok([_, _, Expression::Number(55)])));
+}
+
 #[derive(Debug)]
 enum PipelineError {
     LexError(LexError),
