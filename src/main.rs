@@ -653,10 +653,10 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                             let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
                             fn create_let_env(
-                                caller_env: &Environment,
-                                new_env: &Environment,
                                 varlist: List,
-                            ) -> Result<Environment, EvalError> {
+                                new_env: Environment,
+                                caller_env: Environment,
+                            ) -> Result<(Environment, Environment), EvalError> {
                                 match varlist {
                                     List::Cons(_, _) => {
                                         let (head, tail) = List::head_taillist(varlist)
@@ -673,20 +673,21 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                         }?;
                                         let value = List::single(head)
                                             .or(Err(EvalError::Malformed(Builtin::Let)))?;
-                                        let (value, _) = eval(value, caller_env.clone())?; // TODO
+                                        let (value, caller_env) = eval(value, caller_env)?;
                                         let new_env = Environment::Cons(
                                             name,
                                             value,
                                             Box::new(new_env.clone()),
                                         );
-                                        create_let_env(caller_env, &new_env, tail)
+                                        create_let_env(tail, new_env, caller_env)
                                     }
-                                    List::Nil => Ok(new_env.clone()),
+                                    List::Nil => Ok((new_env, caller_env)),
                                 }
                             }
 
-                            let new_env = create_let_env(&env, &env, varlist)?;
-                            eval(body, new_env)
+                            let (new_env, env) = create_let_env(varlist, env.clone(), env)?;
+                            let (result, _) = eval(body, new_env)?;
+                            Ok((result, env))
                         }
                         Builtin::Eval => {
                             let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
@@ -702,7 +703,7 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                             }?;
                             let value = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (value, env) = eval(value, env)?;
-                            let new_env = Environment::Cons(name, value.clone(), Box::new(env)); // TODO
+                            let new_env = Environment::Cons(name, value.clone(), Box::new(env));
                             Ok((value, new_env))
                         }
                     },
@@ -712,11 +713,11 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                         env: closure_env,
                     }) => {
                         fn create_call_env(
-                            caller_env: &Environment,
-                            new_env: &Environment,
                             params: List,
                             args: List,
-                        ) -> Result<Environment, EvalError> {
+                            new_env: Environment,
+                            caller_env: Environment,
+                        ) -> Result<(Environment, Environment), EvalError> {
                             match (&params, &args) {
                                 (List::Cons(_, _), List::Cons(_, _)) => {
                                     let (param, params) = List::head_taillist(params)
@@ -727,20 +728,21 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                     }?;
                                     let (arg, args) = List::head_taillist(args)
                                         .or(Err(EvalError::MalformedApply))?;
-                                    let (arg, _) = eval(arg, caller_env.clone())?; // TODO
+                                    let (arg, caller_env) = eval(arg, caller_env)?;
 
                                     let new_env =
                                         Environment::Cons(param, arg, Box::new(new_env.clone()));
 
-                                    create_call_env(caller_env, &new_env, params, args)
+                                    create_call_env(params, args, new_env, caller_env)
                                 }
-                                (List::Nil, List::Nil) => Ok(new_env.clone()),
+                                (List::Nil, List::Nil) => Ok((new_env, caller_env)),
                                 _ => Err(EvalError::MalformedApply),
                             }
                         }
 
-                        let call_env = create_call_env(&env, &closure_env, params, rand)?;
-                        eval(*body, call_env)
+                        let (new_env, env) = create_call_env(params, rand, *closure_env.clone(), env)?;
+                        let (result, _) = eval(*body, new_env)?;
+                        Ok((result, env))
                     }
                     _ => Err(EvalError::MalformedApply),
                 }
