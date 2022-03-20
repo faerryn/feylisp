@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut env = Environment::Nil;
 
@@ -95,8 +97,6 @@ enum Lexeme {
 type LexError = std::num::ParseIntError;
 
 fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
-    let mut result = vec![];
-
     enum State {
         Start,
         Sign,
@@ -104,8 +104,8 @@ fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
         Symbol,
     }
 
+    let mut result = vec![];
     let mut state = State::Start;
-
     let mut prev = 0;
 
     for (curr, ch) in src.chars().enumerate() {
@@ -203,13 +203,10 @@ fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
 
     match state {
         State::Start => {}
-        State::Sign => {
-            result.push(Lexeme::Symbol(src[prev..].to_owned()));
-        }
         State::Number => {
             result.push(Lexeme::Number(src[prev..].parse::<_>()?));
         }
-        State::Symbol => {
+        State::Symbol | State::Sign => {
             result.push(Lexeme::Symbol(src[prev..].to_owned()));
         }
     }
@@ -679,14 +676,6 @@ fn eval(
                             Ok((Some(Expression::List(result)), env))
                         }
                         Builtin::Let => {
-                            let (varlist, rand) =
-                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let varlist = match varlist {
-                                Expression::List(list) => Ok(list),
-                                _ => Err(EvalError::Malformed(builtin)),
-                            }?;
-                            let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
-
                             fn create_let_env(
                                 varlist: List,
                                 new_env: Environment,
@@ -718,6 +707,14 @@ fn eval(
                                     List::Nil => Ok((new_env, caller_env)),
                                 }
                             }
+
+                            let (varlist, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let varlist = match varlist {
+                                Expression::List(list) => Ok(list),
+                                _ => Err(EvalError::Malformed(builtin)),
+                            }?;
+                            let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
                             let (new_env, env) = create_let_env(varlist, env.clone(), env)?;
                             let (result, _) = eval(body, new_env)?;
