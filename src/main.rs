@@ -1,13 +1,14 @@
 fn main() {
-    let env = Environment::default();
+    let mut env = Environment::default();
 
     for arg in std::env::args().skip(1) {
         match std::fs::read_to_string(arg) {
             Ok(src) => match pipeline(&src, env.clone()) {
-                Ok(exprs) => {
+                Ok((exprs, new_env)) => {
                     for expr in exprs {
                         println!("{}", expr);
                     }
+                    env = new_env;
                 }
                 Err(err) => eprintln!("error: {}", err),
             },
@@ -23,8 +24,13 @@ fn factorial() {
       (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
   ((Y fact) 5))
 ";
-    let result = pipeline(src, Environment::default());
-    assert!(matches!(result.as_deref(), Ok([Expression::Number(120)])));
+    let env = Environment::default();
+    let result = pipeline(src, env);
+    let result = match result {
+        Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
+        Err(err) => Err(err),
+    };
+    assert!(matches!(result, Ok(([Expression::Number(120)], _))));
 }
 
 #[test]
@@ -34,8 +40,13 @@ fn fibonnaci() {
 (define fib (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2)))))))
 ((Y fib) 10)
 ";
-    let result = pipeline(src, Environment::default());
-    assert!(matches!(result.as_deref(), Ok([_, _, Expression::Number(55)])));
+    let env = Environment::default();
+    let result = pipeline(src, env);
+    let result = match result {
+        Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
+        Err(err) => Err(err),
+    };
+    assert!(matches!(result, Ok(([_, _, Expression::Number(55)], _))));
 }
 
 #[derive(Debug)]
@@ -53,20 +64,22 @@ impl std::fmt::Display for PipelineError {
 
 impl std::error::Error for PipelineError {}
 
-fn pipeline(src: &str, caller_env: Environment) -> Result<Vec<Expression>, PipelineError> {
+fn pipeline(
+    src: &str,
+    mut env: Environment,
+) -> Result<(Vec<Expression>, Environment), PipelineError> {
     let exprs = parse(lex(src).or_else(|err| Err(PipelineError::LexError(err)))?)
         .or_else(|err| Err(PipelineError::ParseError(err)))?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
-    let mut env = caller_env;
     for expr in exprs {
         let (expr, new_env) = eval(expr, env).or_else(|err| Err(PipelineError::EvalError(err)))?;
         env = new_env;
         result.push(expr);
     }
 
-    Ok(result)
+    Ok((result, env))
 }
 
 #[derive(Debug)]
