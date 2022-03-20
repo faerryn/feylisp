@@ -656,7 +656,8 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                 varlist: List,
                                 new_env: Environment,
                                 caller_env: Environment,
-                            ) -> Result<(Environment, Environment), EvalError> {
+                            ) -> Result<(Environment, Environment), EvalError>
+                            {
                                 match varlist {
                                     List::Cons(_, _) => {
                                         let (head, tail) = List::head_taillist(varlist)
@@ -701,7 +702,8 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                                 Expression::Symbol(symbol) => Ok(symbol),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
-                            let value = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let value =
+                                List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (value, env) = eval(value, env)?;
                             let new_env = Environment::Cons(name, value.clone(), Box::new(env));
                             Ok((value, new_env))
@@ -740,7 +742,8 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                             }
                         }
 
-                        let (new_env, env) = create_call_env(params, rand, *closure_env.clone(), env)?;
+                        let (new_env, env) =
+                            create_call_env(params, rand, *closure_env.clone(), env)?;
                         let (result, _) = eval(*body, new_env)?;
                         Ok((result, env))
                     }
