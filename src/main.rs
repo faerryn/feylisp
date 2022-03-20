@@ -17,9 +17,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn factorial() {
     let src = "
-(let Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x))))))
-  (let fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))
-    ((Y fact) 5)))
+(let ((Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
+      (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
+  ((Y fact) 5))
 ";
     let exprs = parse(lex(src).unwrap()).unwrap();
     assert_eq!(exprs.len(), 1);
@@ -581,21 +581,44 @@ fn eval(expr: Expression, env: &Environment) -> Result<Expression, EvalError> {
                             Ok(Expression::List(list_eval(env, rand)?))
                         }
                         Builtin::Let => {
-                            let (name, rand) =
+                            let (varlist, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let name = match name {
-                                Expression::Symbol(symbole) => Ok(symbole),
+                            let varlist = match varlist {
+                                Expression::List(list) => Ok(list),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
-                            let (value, rand) =
-                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let value = eval(value, &env)?;
-
                             let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
-                            let new_env = Environment::Cons(name, value, Box::new(env.clone()));
+                            fn create_let_env(
+                                caller_env: &Environment,
+                                new_env: &Environment,
+                                varlist: List,
+                            ) -> Result<Environment, EvalError> {
+                                match varlist {
+                                    List::Cons(_, _) => {
+                                        let (head, tail) = List::head_taillist(varlist)
+                                            .or(Err(EvalError::Malformed(Builtin::Let)))?;
+                                        let head = match head {
+                                            Expression::List(list) => Ok(list),
+                                            _ => Err(EvalError::Malformed(Builtin::Let)),
+                                        }?;
+                                        let (name, head) = List::head_taillist(head)
+                                            .or(Err(EvalError::Malformed(Builtin::Let)))?;
+                                        let name = match name {
+                                            Expression::Symbol(symbol) => Ok(symbol),
+                                            _ => Err(EvalError::Malformed(Builtin::Let)),
+                                        }?;
+                                        let value = List::single(head)
+                                            .or(Err(EvalError::Malformed(Builtin::Let)))?;
+                                        let value = eval(value, caller_env)?;
+                                        let new_env = Environment::Cons(name, value, Box::new(new_env.clone()));
+                                        create_let_env(caller_env, &new_env, tail)
+                                    }
+                                    List::Nil => Ok(new_env.clone()),
+                                }
+                            }
 
-                            eval(body, &new_env)
+                            eval(body, &create_let_env(&env.clone(), env, varlist)?)
                         }
                         Builtin::Eval => {
                             let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
