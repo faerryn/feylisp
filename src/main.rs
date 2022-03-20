@@ -1,7 +1,7 @@
 use feylisp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut env = Environment::Nil;
+    let mut env = Environment::default();
 
     let mut want_repl = false;
     let mut loaded_files = false;
@@ -36,10 +36,10 @@ mod tests {
     fn factorial() {
         let src = "
 (let ((Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-      (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
+      (fact (lambda (f) (lambda (n) (if (zero n) 1 (mul n (f (sub n 1))))))))
   ((Y fact) 5))
 ";
-        let env = Environment::Nil;
+        let env = Environment::default();
         let result = pipeline(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
@@ -52,10 +52,10 @@ mod tests {
     fn fibonnaci() {
         let src = "
 (define Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define fib (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2)))))))
+(define fib (lambda (f) (lambda (n) (if (lt n 2) n (sum (f (sub n 1)) (f (sub n 2)))))))
 ((Y fib) 10)
 ";
-        let env = Environment::Nil;
+        let env = Environment::default();
         let result = pipeline(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),

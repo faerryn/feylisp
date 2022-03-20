@@ -126,7 +126,8 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
     Ok(result)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[derive(Clone)]
 pub enum Expression {
     Number(i32),
     Symbol(String),
@@ -151,7 +152,8 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[derive(Clone)]
 pub enum List {
     Cons(Box<Expression>, Box<List>),
     Nil,
@@ -210,7 +212,9 @@ impl std::fmt::Display for List {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum Builtin {
     Quote,
     Lambda,
@@ -225,58 +229,60 @@ pub enum Builtin {
     Define,
 }
 
+const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
+    ("quote", Builtin::Quote),
+    ("lambda", Builtin::Lambda),
+    ("if", Builtin::If),
+    ("zero", Builtin::TestMonop(TestMonop::Zero)),
+    ("nil", Builtin::TestMonop(TestMonop::Nil)),
+    ("sum", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
+    ("sub", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
+    ("mul", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
+    ("div", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
+    ("eql", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
+    ("lt", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
+    ("head", Builtin::ListMonop(ListMonop::Head)),
+    ("tail", Builtin::ListMonop(ListMonop::Tail)),
+    ("cons", Builtin::Cons),
+    ("list", Builtin::List),
+    ("let", Builtin::Let),
+    ("eval", Builtin::Eval),
+    ("define", Builtin::Define),
+];
+
 impl std::fmt::Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Builtin::Quote => "quote",
-                Builtin::Lambda => "lambda",
-                Builtin::If => "if",
-                Builtin::TestMonop(op) => match op {
-                    TestMonop::Zero => "zero?",
-                    TestMonop::Nil => "nil?",
-                },
-                Builtin::NumBinop(op) => match op {
-                    NumBinop::ArBinop(op) => match op {
-                        ArBinop::Add => "+",
-                        ArBinop::Sub => "-",
-                        ArBinop::Mul => "*",
-                        ArBinop::Div => "/",
-                    },
-                    NumBinop::OrdBinop(op) => match op {
-                        OrdBinop::Eql => "=",
-                        OrdBinop::Lt => "<",
-                    },
-                },
-                Builtin::ListMonop(op) => match op {
-                    ListMonop::Head => "hd",
-                    ListMonop::Tail => "tl",
-                },
-                Builtin::Cons => "cons",
-                Builtin::List => "list",
-                Builtin::Let => "let",
-                Builtin::Eval => "eval",
-                Builtin::Define => "define",
+        for (name, value) in BUILTIN_NAME_ALIST {
+            if value == *self {
+                write!(f, "{}", name)?;
+                break;
             }
-        )
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum TestMonop {
     Zero,
     Nil,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     OrdBinop(OrdBinop),
 }
 
-#[derive(Copy, Clone, Debug)]
+
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -284,19 +290,26 @@ pub enum ArBinop {
     Div,
 }
 
-#[derive(Copy, Clone, Debug)]
+
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum OrdBinop {
     Eql,
     Lt,
 }
 
-#[derive(Copy, Clone, Debug)]
+
+#[derive(Debug)]
+#[derive(Copy, Clone)]
+#[derive(PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[derive(Clone)]
 pub struct Closure {
     params: List,
     body: Box<Expression>,
@@ -356,7 +369,8 @@ pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[derive(Clone)]
 pub enum Environment {
     Cons(String, Expression, Box<Environment>),
     Nil,
@@ -367,28 +381,22 @@ impl Environment {
         match self {
             Environment::Cons(key, val, _) if key == ident => Some(val.clone()),
             Environment::Cons(_, _, parent) => parent.get(ident),
-            Environment::Nil => Some(Expression::Builtin(match ident {
-                "quote" => Builtin::Quote,
-                "lambda" => Builtin::Lambda,
-                "if" => Builtin::If,
-                "zero?" => Builtin::TestMonop(TestMonop::Zero),
-                "nil?" => Builtin::TestMonop(TestMonop::Nil),
-                "+" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add)),
-                "-" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub)),
-                "*" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul)),
-                "/" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div)),
-                "=" => Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql)),
-                "<" => Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt)),
-                "head" => Builtin::ListMonop(ListMonop::Head),
-                "tail" => Builtin::ListMonop(ListMonop::Tail),
-                "cons" => Builtin::Cons,
-                "list" => Builtin::List,
-                "let" => Builtin::Let,
-                "eval" => Builtin::Eval,
-                "define" => Builtin::Define,
-                _ => return None,
-            })),
+            Environment::Nil => None,
         }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        let mut result = Environment::Nil;
+        for (name, value) in BUILTIN_NAME_ALIST {
+            result = Environment::Cons(
+                name.to_owned(),
+                Expression::Builtin(value),
+                Box::new(result),
+            );
+        }
+        result
     }
 }
 
@@ -668,8 +676,8 @@ pub fn eval(
                                         Expression::Symbol(symbol) => Ok(symbol),
                                         _ => Err(EvalError::MalformedApply),
                                     }?;
-                                    let (arg, args) = List::head_tail(args)
-                                        .or(Err(EvalError::MalformedApply))?;
+                                    let (arg, args) =
+                                        List::head_tail(args).or(Err(EvalError::MalformedApply))?;
                                     let (arg, caller_env) = eval(arg, caller_env)?;
                                     let arg = arg.ok_or(EvalError::ExpectedExpression)?;
 
