@@ -1,12 +1,10 @@
-use std::rc::Rc;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let env = Rc::new(Environment::default());
+    let env = Environment::default();
 
     for arg in std::env::args().skip(1) {
         for expr in parse(lex(&std::fs::read_to_string(arg)?)?)? {
             let orig = format!("{}", expr);
-            match eval(expr, Rc::clone(&env)) {
+            match eval(expr, &env) {
                 Ok(expr) => println!("{} -> {}", orig, expr),
                 Err(err) => println!("{}: {}", orig, err),
             }
@@ -26,7 +24,7 @@ fn factorial() {
     let exprs = parse(lex(src).unwrap()).unwrap();
     assert_eq!(exprs.len(), 1);
     let expr = exprs.into_iter().next().unwrap();
-    let result = eval(expr, Rc::new(Environment::default())).unwrap();
+    let result = eval(expr, &Environment::default()).unwrap();
     assert!(matches!(result, Expression::Number(120)));
 }
 
@@ -342,7 +340,7 @@ enum ListMonop {
 struct Closure {
     params: List,
     body: Box<Expression>,
-    env: Rc<Environment>,
+    env: Box<Environment>,
 }
 
 #[derive(Debug)]
@@ -396,9 +394,9 @@ fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Environment {
-    Cons(String, Expression, Rc<Environment>),
+    Cons(String, Expression, Box<Environment>),
     Nil,
 }
 
@@ -434,7 +432,7 @@ impl Default for Environment {
             ("let", Builtin::Let),
             ("eval", Builtin::Eval),
         ] {
-            env = Environment::Cons(key.to_owned(), Expression::Builtin(val), Rc::new(env));
+            env = Environment::Cons(key.to_owned(), Expression::Builtin(val), Box::new(env));
         }
         env
     }
@@ -470,13 +468,13 @@ impl std::fmt::Display for EvalError {
 
 impl std::error::Error for EvalError {}
 
-fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError> {
+fn eval(expr: Expression, env: &Environment) -> Result<Expression, EvalError> {
     match expr {
         Expression::Symbol(ref ident) => env.get(ident).cloned().ok_or(EvalError::FreeVariable),
         Expression::List(list) => match list {
             List::Cons(_, _) => {
                 let (rator, rand) = List::head_taillist(list).or(Err(EvalError::MalformedApply))?;
-                let rator = eval(rator, Rc::clone(&env))?;
+                let rator = eval(rator, env)?;
 
                 match rator {
                     Expression::Builtin(builtin) => match builtin {
@@ -496,7 +494,7 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                             Ok(Expression::Closure(Closure {
                                 params,
                                 body: Box::new(body),
-                                env: Rc::clone(&env),
+                                env: Box::new(env.clone()),
                             }))
                         }
                         Builtin::If => {
@@ -507,10 +505,10 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                             let unless =
                                 List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
-                            if let Expression::Bool(true) = eval(cond, Rc::clone(&env))? {
-                                eval(when, Rc::clone(&env))
+                            if let Expression::Bool(true) = eval(cond, &env)? {
+                                eval(when, &env)
                             } else {
-                                eval(unless, Rc::clone(&env))
+                                eval(unless, &env)
                             }
                         }
                         Builtin::TestMonop(op) => {
@@ -524,12 +522,12 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                         Builtin::NumBinop(op) => {
                             let (rhs, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let rhs = match eval(rhs, Rc::clone(&env))? {
+                            let rhs = match eval(rhs, &env)? {
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
                             let lhs = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let lhs = match eval(lhs, Rc::clone(&env))? {
+                            let lhs = match eval(lhs, &env)? {
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
@@ -562,21 +560,18 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                         Builtin::Cons => {
                             let (head, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let head = eval(head, Rc::clone(&env))?;
+                            let head = eval(head, &env)?;
                             let tail = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let tail = eval(tail, env)?;
                             Ok(Expression::List(List::Cons(Box::new(head), Box::new(tail))))
                         }
                         Builtin::List => {
-                            fn list_eval(
-                                env: Rc<Environment>,
-                                list: List,
-                            ) -> Result<List, EvalError> {
+                            fn list_eval(env: &Environment, list: List) -> Result<List, EvalError> {
                                 match list {
                                     List::Cons(_, _) => {
                                         let (head, tail) = List::head_taillist(list)
                                             .or(Err(EvalError::Malformed(Builtin::List)))?;
-                                        let head = eval(head, Rc::clone(&env))?;
+                                        let head = eval(head, &env)?;
                                         let tail = Expression::List(list_eval(env, tail)?);
                                         Ok(List::Cons(Box::new(head), Box::new(tail)))
                                     }
@@ -594,17 +589,17 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                             }?;
                             let (value, rand) =
                                 List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let value = eval(value, Rc::clone(&env))?;
+                            let value = eval(value, &env)?;
 
                             let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
-                            let new_env = Rc::new(Environment::Cons(name, value, env));
+                            let new_env = Environment::Cons(name, value, Box::new(env.clone()));
 
-                            eval(body, new_env)
+                            eval(body, &new_env)
                         }
                         Builtin::Eval => {
                             let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let arg = eval(arg, Rc::clone(&env))?;
+                            let arg = eval(arg, &env)?;
                             eval(arg, env)
                         }
                     },
@@ -614,11 +609,11 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                         env: closure_env,
                     }) => {
                         fn create_call_env(
-                            caller_env: Rc<Environment>,
-                            new_env: Rc<Environment>,
+                            caller_env: &Environment,
+                            new_env: &Environment,
                             params: List,
                             args: List,
-                        ) -> Result<Rc<Environment>, EvalError> {
+                        ) -> Result<Environment, EvalError> {
                             match (&params, &args) {
                                 (List::Cons(_, _), List::Cons(_, _)) => {
                                     let (param, params) = List::head_taillist(params)
@@ -629,19 +624,19 @@ fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError>
                                     }?;
                                     let (arg, args) = List::head_taillist(args)
                                         .or(Err(EvalError::MalformedApply))?;
-                                    let arg = eval(arg, Rc::clone(&caller_env))?;
+                                    let arg = eval(arg, &caller_env)?;
 
                                     let new_env =
-                                        Rc::new(Environment::Cons(param, arg, Rc::clone(&new_env)));
+                                        Environment::Cons(param, arg, Box::new(new_env.clone()));
 
-                                    create_call_env(caller_env, new_env, params, args)
+                                    create_call_env(caller_env, &new_env, params, args)
                                 }
-                                (List::Nil, List::Nil) => Ok(new_env),
+                                (List::Nil, List::Nil) => Ok(new_env.clone()),
                                 _ => Err(EvalError::MalformedApply),
                             }
                         }
 
-                        eval(*body, create_call_env(env, closure_env, params, rand)?)
+                        eval(*body, &create_call_env(&env, &closure_env, params, rand)?)
                     }
                     _ => Err(EvalError::MalformedApply),
                 }
