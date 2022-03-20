@@ -16,12 +16,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn factorial() {
-    let src = "\
+    let src = "
 (((lambda r
     ((lambda f (f f))
      (lambda f (r (lambda x ((f f) x))))))
   (lambda f (lambda n (if (zero? n) 1 (* n (f (- n 1)))))))
- 5)";
+ 5)
+";
     let exprs = parse(lex(src).unwrap()).unwrap();
     assert_eq!(exprs.len(), 1);
     let expr = exprs.into_iter().next().unwrap();
