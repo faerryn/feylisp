@@ -218,13 +218,13 @@ impl List {
     }
     fn head_taillist(list: List) -> Result<(Expression, List), ListError> {
         match List::head_tail(list)? {
-            (car, Expression::List(cdr)) => Ok((car, cdr)),
+            (head, Expression::List(tail)) => Ok((head, tail)),
             _ => Err(ListError),
         }
     }
     fn single(list: List) -> Result<Expression, ListError> {
         match List::head_taillist(list)? {
-            (car, List::Nil) => Ok(car),
+            (head, List::Nil) => Ok(head),
             _ => Err(ListError),
         }
     }
@@ -439,8 +439,8 @@ impl Default for Environment {
             ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
             ("=", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
             ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
-            ("car", Builtin::ListMonop(ListMonop::Head)),
-            ("cdr", Builtin::ListMonop(ListMonop::Tail)),
+            ("head", Builtin::ListMonop(ListMonop::Head)),
+            ("tail", Builtin::ListMonop(ListMonop::Tail)),
             ("cons", Builtin::Cons),
             ("list", Builtin::List),
             ("let", Builtin::Let),
