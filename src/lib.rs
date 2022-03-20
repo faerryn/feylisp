@@ -126,8 +126,7 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
     Ok(result)
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Number(i32),
     Symbol(String),
@@ -152,8 +151,7 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum List {
     Cons(Box<Expression>, Box<List>),
     Nil,
@@ -212,9 +210,7 @@ impl std::fmt::Display for List {
     }
 }
 
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Builtin {
     Quote,
     Lambda,
@@ -233,14 +229,14 @@ const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
     ("if", Builtin::If),
-    ("zero", Builtin::TestMonop(TestMonop::Zero)),
-    ("nil", Builtin::TestMonop(TestMonop::Nil)),
-    ("sum", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
-    ("sub", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
-    ("mul", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
-    ("div", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-    ("eql", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
-    ("lt", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
+    ("zero?", Builtin::TestMonop(TestMonop::Zero)),
+    ("nil?", Builtin::TestMonop(TestMonop::Nil)),
+    ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
+    ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
+    ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
+    ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
+    ("=", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
+    ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
     ("head", Builtin::ListMonop(ListMonop::Head)),
     ("tail", Builtin::ListMonop(ListMonop::Tail)),
     ("cons", Builtin::Cons),
@@ -263,26 +259,19 @@ impl std::fmt::Display for Builtin {
     }
 }
 
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TestMonop {
     Zero,
     Nil,
 }
 
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     OrdBinop(OrdBinop),
 }
 
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -290,26 +279,19 @@ pub enum ArBinop {
     Div,
 }
 
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum OrdBinop {
     Eql,
     Lt,
 }
 
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Closure {
     params: List,
     body: Box<Expression>,
@@ -369,8 +351,7 @@ pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
     }
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Environment {
     Cons(String, Expression, Box<Environment>),
     Nil,
@@ -417,7 +398,7 @@ impl std::fmt::Display for Environment {
 
 #[derive(Debug)]
 pub enum EvalError {
-    FreeVariable,
+    FreeVariable(String),
     MalformedApply,
     Malformed(Builtin),
     ExpectedExpression,
@@ -436,9 +417,10 @@ pub fn eval(
     env: Environment,
 ) -> Result<(Option<Expression>, Environment), EvalError> {
     match expr {
-        Expression::Symbol(ref ident) => {
-            Ok((Some(env.get(ident).ok_or(EvalError::FreeVariable)?), env))
-        }
+        Expression::Symbol(ident) => Ok((
+            Some(env.get(&ident).ok_or(EvalError::FreeVariable(ident))?),
+            env,
+        )),
         Expression::List(list) => match list {
             List::Cons(rator, rand) => {
                 let rator = *rator;
