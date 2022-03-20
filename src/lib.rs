@@ -225,11 +225,12 @@ pub enum Builtin {
     Define,
 }
 
-const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
+const BUILTIN_NAME_ALIST: [(&str, Builtin); 19] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
     ("if", Builtin::If),
-    ("zero?", Builtin::TestMonop(TestMonop::Zero)),
+    ("number?", Builtin::TestMonop(TestMonop::Number)),
+    ("list?", Builtin::TestMonop(TestMonop::List)),
     ("nil?", Builtin::TestMonop(TestMonop::Nil)),
     ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
     ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
@@ -261,7 +262,8 @@ impl std::fmt::Display for Builtin {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TestMonop {
-    Zero,
+    Number,
+    List,
     Nil,
 }
 
@@ -478,7 +480,8 @@ pub fn eval(
                             let arg = arg.ok_or(EvalError::Malformed(builtin))?;
                             Ok((
                                 Some(Expression::Bool(match op {
-                                    TestMonop::Zero => matches!(arg, Expression::Number(0)),
+                                    TestMonop::Number => matches!(arg, Expression::Number(_)),
+                                    TestMonop::List => matches!(arg, Expression::List(_)),
                                     TestMonop::Nil => matches!(arg, Expression::List(List::Nil)),
                                 })),
                                 env,

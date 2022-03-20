@@ -36,7 +36,7 @@ mod tests {
     fn factorial() {
         let src = "
 (let ((Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-      (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
+      (fact (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
   ((Y fact) 5))
 ";
         let env = Environment::default();
