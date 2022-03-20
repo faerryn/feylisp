@@ -405,13 +405,8 @@ enum Environment {
 impl Environment {
     fn get(&self, ident: &str) -> Option<&Expression> {
         match self {
-            Environment::Cons(key, val, parent) => {
-                if key == ident {
-                    Some(val)
-                } else {
-                    parent.get(ident)
-                }
-            }
+            Environment::Cons(key, val, _) if key == ident => Some(val),
+            Environment::Cons(_, _, parent) => parent.get(ident),
             Environment::Nil => None,
         }
     }
@@ -477,8 +472,7 @@ impl std::error::Error for EvalError {}
 
 fn eval(expr: Expression, env: Rc<Environment>) -> Result<Expression, EvalError> {
     match expr {
-        // TODO: use reference couting to get ride of this .clone()
-        Expression::Symbol(ref ident) => Ok(env.get(ident).ok_or(EvalError::FreeVariable)?.clone()),
+        Expression::Symbol(ref ident) => env.get(ident).cloned().ok_or(EvalError::FreeVariable),
         Expression::List(list) => match list {
             List::Cons(_, _) => {
                 let (rator, rand) = List::head_taillist(list).or(Err(EvalError::MalformedApply))?;
