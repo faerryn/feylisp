@@ -171,14 +171,14 @@ impl std::fmt::Display for ListError {
 impl std::error::Error for ListError {}
 
 impl List {
-    fn head_tail(list: List) -> Result<(Expression, List), ListError> {
+    fn decons(list: List) -> Result<(Expression, List), ListError> {
         match list {
             List::Cons(head, tail) => Ok((*head, *tail)),
             List::Nil => Err(ListError),
         }
     }
     fn single(list: List) -> Result<Expression, ListError> {
-        match List::head_tail(list)? {
+        match List::decons(list)? {
             (head, List::Nil) => Ok(head),
             _ => Err(ListError),
         }
@@ -440,8 +440,9 @@ pub fn eval(
             Ok((Some(env.get(ident).ok_or(EvalError::FreeVariable)?), env))
         }
         Expression::List(list) => match list {
-            List::Cons(_, _) => {
-                let (rator, rand) = List::head_tail(list).or(Err(EvalError::MalformedApply))?;
+            List::Cons(rator, rand) => {
+                let rator = *rator;
+                let rand = *rand;
                 let (rator, env) = eval(rator, env)?;
                 let rator = match rator {
                     Some(rator) => rator,
@@ -456,7 +457,7 @@ pub fn eval(
                         }
                         Builtin::Lambda => {
                             let (params, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let params = match params {
                                 Expression::List(list) => list,
                                 _ => return Err(EvalError::Malformed(builtin)),
@@ -474,9 +475,9 @@ pub fn eval(
                         }
                         Builtin::If => {
                             let (cond, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (when, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let unless =
                                 List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
@@ -503,7 +504,7 @@ pub fn eval(
                         }
                         Builtin::NumBinop(op) => {
                             let (rhs, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (rhs, env) = eval(rhs, env)?;
                             let rhs = rhs.ok_or(EvalError::Malformed(builtin))?;
                             let rhs = match rhs {
@@ -543,7 +544,7 @@ pub fn eval(
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
                             let (head, tail) =
-                                List::head_tail(arg).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(arg).or(Err(EvalError::Malformed(builtin)))?;
                             Ok((
                                 Some(match op {
                                     ListMonop::Head => head,
@@ -554,7 +555,7 @@ pub fn eval(
                         }
                         Builtin::Cons => {
                             let (head, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (head, env) = eval(head, env)?;
                             let head = head.ok_or(EvalError::Malformed(builtin))?;
                             let tail = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
@@ -576,9 +577,9 @@ pub fn eval(
                             ) -> Result<(List, Environment), EvalError>
                             {
                                 match list {
-                                    List::Cons(_, _) => {
-                                        let (head, tail) = List::head_tail(list)
-                                            .or(Err(EvalError::Malformed(Builtin::List)))?;
+                                    List::Cons(head, tail) => {
+                                        let head = *head;
+                                        let tail = *tail;
                                         let (head, env) = eval(head, env)?;
                                         let head =
                                             head.ok_or(EvalError::Malformed(Builtin::List))?;
@@ -599,14 +600,14 @@ pub fn eval(
                             ) -> Result<(Environment, Environment), EvalError>
                             {
                                 match varlist {
-                                    List::Cons(_, _) => {
-                                        let (head, tail) = List::head_tail(varlist)
-                                            .or(Err(EvalError::Malformed(Builtin::Let)))?;
+                                    List::Cons(head, tail) => {
+                                        let head = *head;
+                                        let tail = *tail;
                                         let head = match head {
                                             Expression::List(list) => Ok(list),
                                             _ => Err(EvalError::Malformed(Builtin::Let)),
                                         }?;
-                                        let (name, head) = List::head_tail(head)
+                                        let (name, head) = List::decons(head)
                                             .or(Err(EvalError::Malformed(Builtin::Let)))?;
                                         let name = match name {
                                             Expression::Symbol(symbol) => Ok(symbol),
@@ -625,7 +626,7 @@ pub fn eval(
                             }
 
                             let (varlist, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let varlist = match varlist {
                                 Expression::List(list) => Ok(list),
                                 _ => Err(EvalError::Malformed(builtin)),
@@ -644,7 +645,7 @@ pub fn eval(
                         }
                         Builtin::Define => {
                             let (name, rand) =
-                                List::head_tail(rand).or(Err(EvalError::Malformed(builtin)))?;
+                                List::decons(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let name = match name {
                                 Expression::Symbol(symbol) => Ok(symbol),
                                 _ => Err(EvalError::Malformed(builtin)),
@@ -668,16 +669,16 @@ pub fn eval(
                             new_env: Environment,
                             caller_env: Environment,
                         ) -> Result<(Environment, Environment), EvalError> {
-                            match (&params, &args) {
-                                (List::Cons(_, _), List::Cons(_, _)) => {
-                                    let (param, params) = List::head_tail(params)
-                                        .or(Err(EvalError::MalformedApply))?;
+                            match (params, args) {
+                                (List::Cons(param, params), List::Cons(arg, args)) => {
+                                    let param = *param;
+                                    let params = *params;
                                     let param = match param {
                                         Expression::Symbol(symbol) => Ok(symbol),
                                         _ => Err(EvalError::MalformedApply),
                                     }?;
-                                    let (arg, args) =
-                                        List::head_tail(args).or(Err(EvalError::MalformedApply))?;
+                                    let arg = *arg;
+                                    let args = *args;
                                     let (arg, caller_env) = eval(arg, caller_env)?;
                                     let arg = arg.ok_or(EvalError::ExpectedExpression)?;
 
