@@ -1,31 +1,55 @@
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let env = Environment::default();
 
     for arg in std::env::args().skip(1) {
-        for expr in parse(lex(&std::fs::read_to_string(arg)?)?)? {
-            let orig = format!("{}", expr);
-            match eval(expr, &env) {
-                Ok(expr) => println!("{} -> {}", orig, expr),
-                Err(err) => println!("{}: {}", orig, err),
-            }
+        match std::fs::read_to_string(arg) {
+            Ok(src) => match pipeline(&src, &env) {
+                Ok(exprs) => {
+                    for expr in exprs {
+                        println!("{}", expr);
+                    }
+                }
+                Err(err) => eprintln!("error: {}", err),
+            },
+            Err(err) => eprintln!("error: {}", err),
         }
     }
-
-    Ok(())
 }
 
 #[test]
 fn factorial() {
+    let env = Environment::default();
     let src = "
 (let ((Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
       (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
   ((Y fact) 5))
 ";
-    let exprs = parse(lex(src).unwrap()).unwrap();
-    assert_eq!(exprs.len(), 1);
-    let expr = exprs.into_iter().next().unwrap();
-    let result = eval(expr, &Environment::default()).unwrap();
-    assert!(matches!(result, Expression::Number(120)));
+    let result = pipeline(src, &env);
+    assert!(matches!(result.as_deref(), Ok([Expression::Number(120)])));
+}
+
+#[derive(Debug)]
+enum PipelineError {
+    LexError(LexError),
+    ParseError(ParseError),
+    EvalError(EvalError),
+}
+
+impl std::fmt::Display for PipelineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for PipelineError {}
+
+fn pipeline(src: &str, env: &Environment) -> Result<Vec<Expression>, PipelineError> {
+    parse(lex(src).or_else(|err| Err(PipelineError::LexError(err)))?)
+        .or_else(|err| Err(PipelineError::ParseError(err)))?
+        .into_iter()
+        .map(|expr| eval(expr, &env))
+        .collect::<Result<_, EvalError>>()
+        .or_else(|err| Err(PipelineError::EvalError(err)))
 }
 
 #[derive(Debug)]
@@ -36,7 +60,9 @@ enum Lexeme {
     Close,
 }
 
-fn lex(src: &str) -> Result<Vec<Lexeme>, std::num::ParseIntError> {
+type LexError = std::num::ParseIntError;
+
+fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
     let mut result = vec![];
 
     enum State {
@@ -611,7 +637,11 @@ fn eval(expr: Expression, env: &Environment) -> Result<Expression, EvalError> {
                                         let value = List::single(head)
                                             .or(Err(EvalError::Malformed(Builtin::Let)))?;
                                         let value = eval(value, caller_env)?;
-                                        let new_env = Environment::Cons(name, value, Box::new(new_env.clone()));
+                                        let new_env = Environment::Cons(
+                                            name,
+                                            value,
+                                            Box::new(new_env.clone()),
+                                        );
                                         create_let_env(caller_env, &new_env, tail)
                                     }
                                     List::Nil => Ok(new_env.clone()),
