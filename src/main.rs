@@ -272,6 +272,7 @@ enum Builtin {
     Cons,
     List,
     Let,
+    Eval,
 }
 
 impl std::fmt::Display for Builtin {
@@ -306,6 +307,7 @@ impl std::fmt::Display for Builtin {
                 Builtin::Cons => "cons",
                 Builtin::List => "list",
                 Builtin::Let => "let",
+                Builtin::Eval => "eval",
             }
         )
     }
@@ -442,6 +444,7 @@ impl Default for Environment {
             ("cons", Builtin::Cons),
             ("list", Builtin::List),
             ("let", Builtin::Let),
+            ("eval", Builtin::Eval),
         ] {
             env = Environment::Cons(
                 key.to_owned(),
@@ -615,6 +618,11 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             let new_env = std::rc::Rc::new(Environment::Cons(name, value, env));
 
                             eval(body, new_env)
+                        }
+                        Builtin::Eval => {
+                            let arg = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let arg = eval(arg, std::rc::Rc::clone(&env))?;
+                            eval(arg, env)
                         }
                     },
                     Expression::Closure(Closure {
