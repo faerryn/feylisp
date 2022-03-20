@@ -2,8 +2,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env = std::rc::Rc::new(Environment::default());
 
     for arg in std::env::args().skip(1) {
-        let src = parse(lex(&std::fs::read_to_string(arg)?)?)?;
-        for expr in src {
+        for expr in parse(lex(&std::fs::read_to_string(arg)?)?)? {
             let orig = format!("{}", expr);
             match eval(expr, std::rc::Rc::clone(&env)) {
                 Ok(expr) => println!("{} -> {}", orig, expr),
@@ -13,6 +12,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[test]
+fn factorial() {
+    let src = "\
+(((lambda r
+    ((lambda f (f f))
+     (lambda f (r (lambda x ((f f) x))))))
+  (lambda f (lambda n (if (zero? n) 1 (* n (f (- n 1)))))))
+ 5)";
+    let exprs = parse(lex(src).unwrap()).unwrap();
+    assert_eq!(exprs.len(), 1);
+    let expr = exprs.into_iter().next().unwrap();
+    let result = eval(expr, std::rc::Rc::new(Environment::default())).unwrap();
+    assert!(matches!(result, Expression::Number(120)));
 }
 
 #[derive(Debug)]
@@ -164,11 +178,7 @@ impl std::fmt::Display for Expression {
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(Closure {
-                param,
-                body,
-                env,
-            }) => {
+            Expression::Closure(Closure { param, body, env }) => {
                 write!(f, "(lambda {} {}) [{}]", param, body, env)
             }
         }
@@ -424,7 +434,7 @@ impl std::fmt::Display for Environment {
                     Environment::Cons(_, _, _) => write!(f, ", {}", parent),
                     Environment::Nil => Ok(()),
                 }
-            },
+            }
             Environment::Nil => todo!(),
         }
     }
