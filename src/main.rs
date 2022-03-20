@@ -1,20 +1,16 @@
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut env = Environment::default();
 
     for arg in std::env::args().skip(1) {
-        match std::fs::read_to_string(arg) {
-            Ok(src) => match pipeline(&src, env.clone()) {
-                Ok((exprs, new_env)) => {
-                    for expr in exprs {
-                        println!("{}", expr);
-                    }
-                    env = new_env;
-                }
-                Err(err) => eprintln!("error: {}", err),
-            },
-            Err(err) => eprintln!("error: {}", err),
+        let src = std::fs::read_to_string(arg)?;
+        let (exprs, new_env) = pipeline(&src, env)?;
+        for expr in exprs {
+            println!("{}", expr);
         }
+        env = new_env;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -730,8 +726,8 @@ fn eval(expr: Expression, env: Environment) -> Result<(Expression, Environment),
                             let value =
                                 List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let (value, env) = eval(value, env)?;
-                            let new_env = Environment::Cons(name, value.clone(), Box::new(env));
-                            Ok((value, new_env))
+                            let new_env = Environment::Cons(name, value, Box::new(env));
+                            Ok((Expression::List(List::Nil), new_env))
                         }
                     },
                     Expression::Closure(Closure {
