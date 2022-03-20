@@ -1,24 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut env = std::rc::Rc::new(Environment::Nil);
-    for (key, val) in [
-        ("quote", Builtin::Quote),
-        ("lambda", Builtin::Lambda),
-        ("if", Builtin::If),
-        ("zero?", Builtin::TestMonop(TestMonop::Zero)),
-        ("nil?", Builtin::TestMonop(TestMonop::Nil)),
-        ("+", Builtin::ArithBinop(ArithBinop::Add)),
-        ("-", Builtin::ArithBinop(ArithBinop::Sub)),
-        ("*", Builtin::ArithBinop(ArithBinop::Mul)),
-        ("/", Builtin::ArithBinop(ArithBinop::Div)),
-        ("hd", Builtin::ListMonop(ListMonop::Head)),
-        ("tl", Builtin::ListMonop(ListMonop::Tail)),
-    ] {
-        env = std::rc::Rc::new(Environment::Cons(
-            key.to_owned(),
-            Expression::Builtin(val),
-            env,
-        ));
-    }
+    let env = std::rc::Rc::new(Environment::default());
 
     for arg in std::env::args().skip(1) {
         let src = parse(lex(&std::fs::read_to_string(arg)?)?)?;
@@ -183,8 +164,12 @@ impl std::fmt::Display for Expression {
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(Closure { param, body, env: _ }) => {
-                write!(f, "(lambda {} {})", param, body)
+            Expression::Closure(Closure {
+                param,
+                body,
+                env,
+            }) => {
+                write!(f, "(lambda {} {}) [{}]", param, body, env)
             }
         }
     }
@@ -404,6 +389,47 @@ impl Environment {
     }
 }
 
+impl Default for Environment {
+    fn default() -> Self {
+        let mut env = Environment::Nil;
+        for (key, val) in [
+            ("quote", Builtin::Quote),
+            ("lambda", Builtin::Lambda),
+            ("if", Builtin::If),
+            ("zero?", Builtin::TestMonop(TestMonop::Zero)),
+            ("nil?", Builtin::TestMonop(TestMonop::Nil)),
+            ("+", Builtin::ArithBinop(ArithBinop::Add)),
+            ("-", Builtin::ArithBinop(ArithBinop::Sub)),
+            ("*", Builtin::ArithBinop(ArithBinop::Mul)),
+            ("/", Builtin::ArithBinop(ArithBinop::Div)),
+            ("hd", Builtin::ListMonop(ListMonop::Head)),
+            ("tl", Builtin::ListMonop(ListMonop::Tail)),
+        ] {
+            env = Environment::Cons(
+                key.to_owned(),
+                Expression::Builtin(val),
+                std::rc::Rc::new(env),
+            );
+        }
+        env
+    }
+}
+
+impl std::fmt::Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Environment::Cons(key, val, parent) => {
+                write!(f, "{}: {}", key, val)?;
+                match **parent {
+                    Environment::Cons(_, _, _) => write!(f, ", {}", parent),
+                    Environment::Nil => Ok(()),
+                }
+            },
+            Environment::Nil => todo!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum EvalError {
     FreeVariable,
@@ -434,14 +460,13 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             Ok(arg)
                         }
                         Builtin::Lambda => {
-                            let (param, rand) = List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)
-                            ))?;
+                            let (param, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let param = match param {
                                 Expression::Symbol(symbol) => Ok(symbol),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
-                            let body = List::single(rand).or(Err(EvalError::Malformed(builtin)
-                            ))?;
+                            let body = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
                             Ok(Expression::Closure(Closure {
                                 param,
@@ -450,9 +475,12 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             }))
                         }
                         Builtin::If => {
-                            let (cond, rand) = List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let (when, rand) = List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
-                            let unless = List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let (cond, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let (when, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let unless =
+                                List::single(rand).or(Err(EvalError::Malformed(builtin)))?;
 
                             if let Expression::Bool(true) = eval(cond, std::rc::Rc::clone(&env))? {
                                 eval(when, std::rc::Rc::clone(&env))
@@ -469,7 +497,8 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                             }))
                         }
                         Builtin::ArithBinop(op) => {
-                            let (rhs, rand) = List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
+                            let (rhs, rand) =
+                                List::head_taillist(rand).or(Err(EvalError::Malformed(builtin)))?;
                             let rhs = match eval(rhs, std::rc::Rc::clone(&env))? {
                                 Expression::Number(number) => Ok(number),
                                 _ => Err(EvalError::Malformed(builtin)),
@@ -492,14 +521,19 @@ fn eval(expr: Expression, env: std::rc::Rc<Environment>) -> Result<Expression, E
                                 Expression::List(list) => Ok(list),
                                 _ => Err(EvalError::Malformed(builtin)),
                             }?;
-                            let (head, tail) = List::head_tail(arg).or(Err(EvalError::Malformed(builtin)))?;
+                            let (head, tail) =
+                                List::head_tail(arg).or(Err(EvalError::Malformed(builtin)))?;
                             match op {
                                 ListMonop::Head => Ok(head),
                                 ListMonop::Tail => Ok(tail),
                             }
                         }
                     },
-                    Expression::Closure(Closure { param, body, env: closure_env }) => {
+                    Expression::Closure(Closure {
+                        param,
+                        body,
+                        env: closure_env,
+                    }) => {
                         if param == "_" {
                             eval(*body, closure_env)
                         } else {
