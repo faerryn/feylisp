@@ -2,19 +2,25 @@
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut env = Environment::Nil;
+
+    let mut want_repl = false;
     let mut loaded_files = false;
 
     for arg in std::env::args().skip(1) {
-        let src = std::fs::read_to_string(arg)?;
-        let (exprs, new_env) = pipeline(&src, env)?;
-        for expr in exprs {
-            println!("{}", expr);
+        if arg == "--repl" {
+            want_repl = true;
+        } else {
+            let src = std::fs::read_to_string(arg)?;
+            let (exprs, new_env) = pipeline(&src, env)?;
+            for expr in exprs {
+                println!("{}", expr);
+            }
+            env = new_env;
+            loaded_files = true;
         }
-        env = new_env;
-        loaded_files = true;
     }
 
-    if !loaded_files {
+    if want_repl || !loaded_files {
         env = repl(env)?;
         println!("[{}]", env);
     }
@@ -126,10 +132,10 @@ fn pipeline(
 
 #[derive(Debug)]
 enum Lexeme {
-    Number(i32),
-    Symbol(String),
     Open,
     Close,
+    Number(i32),
+    Symbol(String),
 }
 
 type LexError = std::num::ParseIntError;
@@ -454,6 +460,18 @@ fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
 
     for lexeme in src {
         match lexeme {
+            Lexeme::Open => {
+                stack.push(vec![]);
+            }
+            Lexeme::Close => {
+                let list = List::from(stack.pop().ok_or(ParseError)?);
+                // TODO: Error if . shows up anywhere other than right before the last
+                // TODO: and interpret it as appropriate
+                stack
+                    .last_mut()
+                    .ok_or(ParseError)?
+                    .push(Expression::List(list));
+            }
             Lexeme::Number(number) => {
                 stack
                     .last_mut()
@@ -469,16 +487,6 @@ fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
                         "#f" => Expression::Bool(false),
                         _ => Expression::Symbol(symbol),
                     });
-            }
-            Lexeme::Open => {
-                stack.push(vec![]);
-            }
-            Lexeme::Close => {
-                let list = List::from(stack.pop().ok_or(ParseError)?);
-                stack
-                    .last_mut()
-                    .ok_or(ParseError)?
-                    .push(Expression::List(list));
             }
         }
     }
