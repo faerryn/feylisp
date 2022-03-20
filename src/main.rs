@@ -1,5 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut env = Environment::default();
+    let mut env = Environment::Nil;
 
     for arg in std::env::args().skip(1) {
         let src = std::fs::read_to_string(arg)?;
@@ -24,7 +24,7 @@ mod tests {
       (fact (lambda (f) (lambda (n) (if (zero? n) 1 (* n (f (- n 1))))))))
   ((Y fact) 5))
 ";
-        let env = Environment::default();
+        let env = Environment::Nil;
         let result = pipeline(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
@@ -40,7 +40,7 @@ mod tests {
 (define fib (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2)))))))
 ((Y fib) 10)
 ";
-        let env = Environment::default();
+        let env = Environment::Nil;
         let result = pipeline(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
@@ -461,41 +461,34 @@ enum Environment {
 }
 
 impl Environment {
-    fn get(&self, ident: &str) -> Option<&Expression> {
+    fn get(&self, ident: &str) -> Option<Expression> {
         match self {
-            Environment::Cons(key, val, _) if key == ident => Some(val),
+            Environment::Cons(key, val, _) if key == ident => Some(val.clone()),
             Environment::Cons(_, _, parent) => parent.get(ident),
-            Environment::Nil => None,
+            Environment::Nil => Some(Expression::Builtin(
+                match ident {
+                    "quote" => Builtin::Quote,
+                    "lambda" => Builtin::Lambda,
+                    "if" => Builtin::If,
+                    "zero?" => Builtin::TestMonop(TestMonop::Zero),
+                    "nil?" => Builtin::TestMonop(TestMonop::Nil),
+                    "+" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add)),
+                    "-" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub)),
+                    "*" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul)),
+                    "/" => Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div)),
+                    "=" => Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql)),
+                    "<" => Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt)),
+                    "head" => Builtin::ListMonop(ListMonop::Head),
+                    "tail" => Builtin::ListMonop(ListMonop::Tail),
+                    "cons" => Builtin::Cons,
+                    "list" => Builtin::List,
+                    "let" => Builtin::Let,
+                    "eval" => Builtin::Eval,
+                    "define" => Builtin::Define,
+                    _ => return None,
+                },
+            )),
         }
-    }
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        let mut env = Environment::Nil;
-        for (key, val) in [
-            ("quote", Builtin::Quote),
-            ("lambda", Builtin::Lambda),
-            ("if", Builtin::If),
-            ("zero?", Builtin::TestMonop(TestMonop::Zero)),
-            ("nil?", Builtin::TestMonop(TestMonop::Nil)),
-            ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
-            ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
-            ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
-            ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-            ("=", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
-            ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
-            ("head", Builtin::ListMonop(ListMonop::Head)),
-            ("tail", Builtin::ListMonop(ListMonop::Tail)),
-            ("cons", Builtin::Cons),
-            ("list", Builtin::List),
-            ("let", Builtin::Let),
-            ("eval", Builtin::Eval),
-            ("define", Builtin::Define),
-        ] {
-            env = Environment::Cons(key.to_owned(), Expression::Builtin(val), Box::new(env));
-        }
-        env
     }
 }
 
@@ -536,7 +529,7 @@ fn eval(
 ) -> Result<(Option<Expression>, Environment), EvalError> {
     match expr {
         Expression::Symbol(ref ident) => Ok((
-            Some(env.get(ident).ok_or(EvalError::FreeVariable)?.clone()),
+            Some(env.get(ident).ok_or(EvalError::FreeVariable)?),
             env,
         )),
         Expression::List(list) => match list {
