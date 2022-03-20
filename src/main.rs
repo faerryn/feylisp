@@ -2,6 +2,7 @@
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut env = Environment::Nil;
+    let mut loaded_files = false;
 
     for arg in std::env::args().skip(1) {
         let src = std::fs::read_to_string(arg)?;
@@ -10,6 +11,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", expr);
         }
         env = new_env;
+        loaded_files = true;
+    }
+
+    if !loaded_files {
+        env = repl(env)?;
+        println!("[{}]", env);
     }
 
     Ok(())
@@ -50,6 +57,37 @@ mod tests {
         };
         assert!(matches!(result, Ok(([Expression::Number(55)], _))));
     }
+}
+
+fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Error>> {
+    use std::io::prelude::*;
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+
+    let mut src = String::new();
+    let mut line = String::new();
+
+    print!("> ");
+    stdout.flush()?;
+
+    while stdin.read_line(&mut line)? > 0 {
+        src.push_str(&line);
+        line.clear();
+        if let Some(exprs) = lex(&src).ok().and_then(|src| parse(src).ok()) {
+            src.clear();
+            for expr in exprs {
+                let (expr, new_env) = eval(expr, env)?;
+                env = new_env;
+                if let Some(expr) = expr {
+                    println!("{}", expr);
+                }
+            }
+            print!("> ");
+            stdout.flush()?;
+        }
+    }
+
+    Ok(env)
 }
 
 #[derive(Debug)]
