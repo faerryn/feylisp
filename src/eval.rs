@@ -68,6 +68,20 @@ pub fn eval(
                                 env,
                             ))
                         }
+                        Builtin::Macro => {
+                            let (closure, rand) =
+                                List::decons(rand).ok_or(Error::Malformed(builtin))?;
+                            if matches!(rand, List::Cons(_, _)) {
+                                return Err(Error::Malformed(builtin));
+                            }
+                            let (closure, env) = eval(closure, env)?;
+                            let closure = closure.ok_or(Error::ExpectedExpression)?;
+                            let closure = match closure {
+                                Expression::Closure(closure) => closure,
+                                _ => return Err(Error::Malformed(builtin)),
+                            };
+                            Ok((Some(Expression::Macro(closure)), env))
+                        }
                         Builtin::If => {
                             let (cond, rand) =
                                 List::decons(rand).ok_or(Error::Malformed(builtin))?;
@@ -200,7 +214,7 @@ pub fn eval(
                             Ok((Some(Expression::List(result)), env))
                         }
                         Builtin::Let => {
-                            fn create_let_env(
+                            fn let_env(
                                 varlist: List,
                                 new_env: Environment,
                                 caller_env: Environment,
@@ -227,7 +241,7 @@ pub fn eval(
                                     let (value, caller_env) = eval(value, caller_env)?;
                                     let value = value.ok_or(Error::ExpectedExpression)?;
                                     let new_env = Environment::cons(name, value, new_env);
-                                    create_let_env(tail, new_env, caller_env)
+                                    let_env(tail, new_env, caller_env)
                                 } else {
                                     Ok((new_env, caller_env))
                                 }
@@ -244,7 +258,7 @@ pub fn eval(
                                 return Err(Error::Malformed(builtin));
                             }
 
-                            let (new_env, env) = create_let_env(varlist, env.clone(), env)?;
+                            let (new_env, env) = let_env(varlist, env.clone(), env)?;
                             let (result, _) = eval(body, new_env)?;
                             Ok((result, env))
                         }
@@ -281,7 +295,7 @@ pub fn eval(
                         body,
                         env: closure_env,
                     }) => {
-                        fn create_call_env(
+                        fn call_closure_env(
                             params: List,
                             args: List,
                             new_env: Environment,
@@ -301,13 +315,46 @@ pub fn eval(
 
                                     let new_env = Environment::cons(param, arg, new_env);
 
-                                    create_call_env(params, args, new_env, caller_env)
+                                    call_closure_env(params, args, new_env, caller_env)
                                 }
                                 _ => Err(Error::MalformedApply),
                             }
                         }
 
-                        let (new_env, env) = create_call_env(params, rand, closure_env, env)?;
+                        let (new_env, env) = call_closure_env(params, rand, closure_env, env)?;
+                        let (result, _) = eval(*body, new_env)?;
+                        Ok((result, env))
+                    }
+                    Expression::Macro(Closure {
+                        params,
+                        body,
+                        env: closure_env,
+                    }) => {
+                        fn call_macro_env(
+                            params: List,
+                            args: List,
+                            new_env: Environment,
+                            caller_env: Environment,
+                        ) -> Result<(Environment, Environment), Error> {
+                            match (params, args) {
+                                (List::Nil, List::Nil) => Ok((new_env, caller_env)),
+                                (List::Cons(param, params), List::Cons(arg, args)) => {
+                                    let (param, params) = (*param, *params);
+                                    let (arg, args) = (*arg, *args);
+                                    let param = match param {
+                                        Expression::Symbol(symbol) => Ok(symbol),
+                                        _ => Err(Error::MalformedApply),
+                                    }?;
+
+                                    let new_env = Environment::cons(param, arg, new_env);
+
+                                    call_macro_env(params, args, new_env, caller_env)
+                                }
+                                _ => Err(Error::MalformedApply),
+                            }
+                        }
+
+                        let (new_env, env) = call_macro_env(params, rand, closure_env, env)?;
                         let (result, _) = eval(*body, new_env)?;
                         Ok((result, env))
                     }

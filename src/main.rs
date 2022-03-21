@@ -11,7 +11,7 @@ fn main() {
                     }
                     env = new_env;
                 }
-                Err(_err) => todo!(),
+                Err(_err) => todo!("{:?}", _err),
             }
         }
     }
@@ -20,6 +20,6 @@ fn main() {
         Ok(env) => {
             println!("[{}]", env);
         }
-        Err(_err) => todo!(),
+        Err(_err) => todo!("{:?}", _err),
     }
 }

@@ -6,6 +6,7 @@ pub enum Expression {
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
+    Macro(Closure),
 }
 
 impl std::fmt::Display for Expression {
@@ -16,9 +17,8 @@ impl std::fmt::Display for Expression {
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(Closure { params, body, env }) => {
-                write!(f, "(lambda ({}) {}) [{}]", params, body, env)
-            }
+            Expression::Closure(closure) => write!(f, "{}", closure),
+            Expression::Macro(closure) => write!(f, "(macro {})", closure),
         }
     }
 }
@@ -39,10 +39,12 @@ impl std::fmt::Display for ListError {
 }
 
 impl List {
-    #[must_use] pub fn cons(expr: Expression, list: List) -> List {
+    #[must_use]
+    pub fn cons(expr: Expression, list: List) -> List {
         List::Cons(Box::new(expr), Box::new(list))
     }
-    #[must_use] pub fn decons(self) -> Option<(Expression, List)> {
+    #[must_use]
+    pub fn decons(self) -> Option<(Expression, List)> {
         if let List::Cons(head, tail) = self {
             Some((*head, *tail))
         } else {
@@ -82,6 +84,7 @@ impl std::fmt::Display for List {
 pub enum Builtin {
     Quote,
     Lambda,
+    Macro,
     If,
     TestMonop(TestMonop),
     NumBinop(NumBinop),
@@ -93,9 +96,10 @@ pub enum Builtin {
     Define,
 }
 
-const BUILTIN_NAME_ALIST: [(&str, Builtin); 19] = [
+const BUILTIN_NAME_ALIST: [(&str, Builtin); 20] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
+    ("macro", Builtin::Macro),
     ("if", Builtin::If),
     ("number?", Builtin::TestMonop(TestMonop::Number)),
     ("list?", Builtin::TestMonop(TestMonop::List)),
@@ -168,6 +172,11 @@ pub struct Closure {
     pub env: Environment,
 }
 
+impl std::fmt::Display for Closure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(lambda ({}) {}) [{}]", self.params, self.body, self.env)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Environment {
@@ -185,7 +194,8 @@ impl Environment {
         }
     }
 
-    #[must_use] pub fn cons(name: String, value: Expression, env: Environment) -> Environment {
+    #[must_use]
+    pub fn cons(name: String, value: Expression, env: Environment) -> Environment {
         Environment::Cons(name, Box::new(value), Box::new(env))
     }
 }
