@@ -289,11 +289,11 @@ impl std::fmt::Display for Builtin {
         for (name, value) in BUILTIN_NAME_ALIST {
             if value == *self {
                 write!(f, "{}", name)?;
-                break;
+                return Ok(());
             }
         }
 
-        Ok(())
+        Err(std::fmt::Error)
     }
 }
 
@@ -357,9 +357,7 @@ pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, ParseError> {
                 stack.push(vec![]);
             }
             Lexeme::Close => {
-                let list = List::from(stack.pop().ok_or(ParseError)?);
-                // TODO: Error if . shows up anywhere other than right before the last
-                // TODO: and interpret it as appropriate
+                let list = stack.pop().ok_or(ParseError)?.into();
                 stack
                     .last_mut()
                     .ok_or(ParseError)?

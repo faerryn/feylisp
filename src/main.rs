@@ -4,18 +4,22 @@ fn main() {
     let mut env = Environment::default();
     for file in std::env::args().skip(1) {
         if let Ok(src) = std::fs::read_to_string(file) {
-            if let Ok((exprs, new_env)) = eval_src(&src, env) {
-                for expr in exprs {
-                    println!("{}", expr);
+            match eval_src(&src, env) {
+                Ok((exprs, new_env)) => {
+                    for expr in exprs {
+                        println!("{}", expr);
+                    }
+                    env = new_env;
                 }
-                env = new_env;
-            } else {
-                todo!();
+                Err(_err) => todo!(),
             }
         }
     }
 
-    if let Ok(env) = repl(env) {
-        println!("[{}]", env);
+    match repl(env) {
+        Ok(env) => {
+            println!("[{}]", env);
+        }
+        Err(_err) => todo!(),
     }
 }
