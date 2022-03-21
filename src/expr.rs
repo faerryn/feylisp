@@ -38,19 +38,15 @@ impl std::fmt::Display for ListError {
     }
 }
 
-impl std::error::Error for ListError {}
-
 impl List {
-    pub fn decons(list: List) -> Result<(Expression, List), ListError> {
-        match list {
-            List::Cons(head, tail) => Ok((*head, *tail)),
-            List::Nil => Err(ListError),
-        }
+    pub fn cons(expr: Expression, tail: List) -> List {
+        List::Cons(Box::new(expr), Box::new(tail))
     }
-    pub fn single(list: List) -> Result<Expression, ListError> {
-        match List::decons(list)? {
-            (head, List::Nil) => Ok(head),
-            _ => Err(ListError),
+    pub fn decons(self) -> Option<(Expression, List)> {
+        if let List::Cons(head, tail) = self {
+            Some((*head, *tail))
+        } else {
+            None
         }
     }
 }
