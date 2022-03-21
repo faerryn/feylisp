@@ -95,10 +95,10 @@ pub fn eval(
                             let (cond, env) = eval(cond, env)?;
                             let cond = cond.ok_or(Error::ExpectedExpression)?;
 
-                            if let Expression::Bool(true) = cond {
-                                eval(when, env)
-                            } else {
+                            if let Expression::Bool(false) = cond {
                                 eval(unless, env)
+                            } else {
+                                eval(when, env)
                             }
                         }
                         Builtin::TestMonop(op) => {
