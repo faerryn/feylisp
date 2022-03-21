@@ -9,12 +9,8 @@ mod tests {
   ((Y fact) 5))
 ";
         let env = Environment::default();
-        let result = eval_src(src, env);
-        let result = match result {
-            Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
-            Err(err) => Err(err),
-        };
-        assert!(matches!(result, Ok(([Expression::Number(120)], _))));
+        let (exprs, _) = eval_src(src, env).unwrap();
+        assert!(matches!(exprs.as_slice(), [Expression::Number(120)]));
     }
 
     #[test]
@@ -25,11 +21,7 @@ mod tests {
 (fib 10)
 ";
         let env = Environment::default();
-        let result = eval_src(src, env);
-        let result = match result {
-            Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
-            Err(err) => Err(err),
-        };
-        assert!(matches!(result, Ok(([Expression::Number(55)], _))));
+        let (exprs, _) = eval_src(src, env).unwrap();
+        assert!(matches!(exprs.as_slice(), [Expression::Number(55)]));
     }
 }
