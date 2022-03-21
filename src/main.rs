@@ -1,26 +1,28 @@
-use feylisp::*;
+use clap::Parser;
+use feylisp::{eval, lex, parse, Environment, EvalError, Expression, LexError, ParseError};
+
+#[derive(Debug, Parser)]
+struct Args {
+    files: Vec<String>,
+
+    #[clap(short, long)]
+    repl: bool,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+
     let mut env = Environment::default();
-
-    let mut want_repl = false;
-    let mut loaded_files = false;
-
-    for arg in std::env::args().skip(1) {
-        if arg == "--repl" {
-            want_repl = true;
-        } else {
-            let src = std::fs::read_to_string(arg)?;
-            let (exprs, new_env) = pipeline(&src, env)?;
-            for expr in exprs {
-                println!("{}", expr);
-            }
-            env = new_env;
-            loaded_files = true;
+    for file in &args.files {
+        let src = std::fs::read_to_string(file)?;
+        let (exprs, new_env) = eval_src(&src, env)?;
+        for expr in exprs {
+            println!("{}", expr);
         }
+        env = new_env;
     }
 
-    if want_repl || !loaded_files {
+    if args.repl || args.files.is_empty() {
         env = repl(env)?;
         println!("[{}]", env);
     }
@@ -40,7 +42,7 @@ mod tests {
   ((Y fact) 5))
 ";
         let env = Environment::default();
-        let result = pipeline(src, env);
+        let result = eval_src(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
             Err(err) => Err(err),
@@ -56,7 +58,7 @@ mod tests {
 ((Y fib) 10)
 ";
         let env = Environment::default();
-        let result = pipeline(src, env);
+        let result = eval_src(src, env);
         let result = match result {
             Ok((ref exprs, env)) => Ok((exprs.as_slice(), env)),
             Err(err) => Err(err),
@@ -97,30 +99,30 @@ fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Error>>
 }
 
 #[derive(Debug)]
-enum PipelineError {
+enum EvalSrcError {
     Lex(LexError),
     Parse(ParseError),
     Eval(EvalError),
 }
 
-impl std::fmt::Display for PipelineError {
+impl std::fmt::Display for EvalSrcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for PipelineError {}
+impl std::error::Error for EvalSrcError {}
 
-fn pipeline(
+fn eval_src(
     src: &str,
     mut env: Environment,
-) -> Result<(Vec<Expression>, Environment), PipelineError> {
-    let exprs = parse(lex(src).map_err(PipelineError::Lex)?).map_err(PipelineError::Parse)?;
+) -> Result<(Vec<Expression>, Environment), EvalSrcError> {
+    let exprs = parse(lex(src).map_err(EvalSrcError::Lex)?).map_err(EvalSrcError::Parse)?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
     for expr in exprs {
-        let (expr, new_env) = eval(expr, env).map_err(PipelineError::Eval)?;
+        let (expr, new_env) = eval(expr, env).map_err(EvalSrcError::Eval)?;
         if let Some(expr) = expr {
             result.push(expr);
         }
