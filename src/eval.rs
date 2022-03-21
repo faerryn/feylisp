@@ -356,7 +356,8 @@ pub fn eval(
 
                         let (new_env, env) = call_macro_env(params, rand, closure_env, env)?;
                         let (result, _) = eval(*body, new_env)?;
-                        Ok((result, env))
+                        let result = result.ok_or(Error::ExpectedExpression)?;
+                        eval(result, env)
                     }
                     _ => Err(Error::MalformedApply),
                 }
