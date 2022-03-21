@@ -1,53 +1,51 @@
-use crate::lex::Lexeme;
 use crate::expr::Expression;
+use crate::lex::Lexeme;
 
 #[derive(Debug)]
-pub struct Error;
+pub enum Error {
+    Unclosed,
+    UnexpectedClose,
+}
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "parse error")
+        write!(f, "{:?}", self)
     }
 }
 
 impl std::error::Error for Error {}
 
 pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, Error> {
-    let mut stack = vec![vec![]];
+    let mut stack = vec![];
+    let mut top = vec![];
 
     for lexeme in src {
         match lexeme {
             Lexeme::Open => {
-                stack.push(vec![]);
+                stack.push(top);
+                top = vec![];
             }
             Lexeme::Close => {
-                let list = stack.pop().ok_or(Error)?.into();
-                stack
-                    .last_mut()
-                    .ok_or(Error)?
-                    .push(Expression::List(list));
+                let mut new_top = stack.pop().ok_or(Error::UnexpectedClose)?;
+                new_top.push(Expression::List(top.into()));
+                top = new_top;
             }
             Lexeme::Number(number) => {
-                stack
-                    .last_mut()
-                    .ok_or(Error)?
-                    .push(Expression::Number(number));
+                top.push(Expression::Number(number));
             }
             Lexeme::Symbol(symbol) => {
-                stack
-                    .last_mut()
-                    .ok_or(Error)?
-                    .push(match symbol.as_str() {
-                        "#t" => Expression::Bool(true),
-                        "#f" => Expression::Bool(false),
-                        _ => Expression::Symbol(symbol),
-                    });
+                top.push(match symbol.as_str() {
+                    "#t" => Expression::Bool(true),
+                    "#f" => Expression::Bool(false),
+                    _ => Expression::Symbol(symbol),
+                });
             }
         }
     }
 
-    match &mut stack[..] {
-        [top] => Ok(std::mem::take(top)),
-        _ => Err(Error),
+    if stack.is_empty() {
+        Ok(top)
+    } else {
+        Err(Error::Unclosed)
     }
 }
