@@ -63,7 +63,7 @@ pub fn eval(
                                 Some(Expression::Closure(Closure {
                                     params,
                                     body: Box::new(body),
-                                    env: Box::new(env.clone()),
+                                    env: env.clone(),
                                 })),
                                 env,
                             ))
@@ -226,7 +226,7 @@ pub fn eval(
 
                                     let (value, caller_env) = eval(value, caller_env)?;
                                     let value = value.ok_or(Error::ExpectedExpression)?;
-                                    let new_env = Environment::Cons(name, value, Box::new(new_env));
+                                    let new_env = Environment::cons(name, value, new_env);
                                     create_let_env(tail, new_env, caller_env)
                                 } else {
                                     Ok((new_env, caller_env))
@@ -272,7 +272,7 @@ pub fn eval(
 
                             let (value, env) = eval(value, env)?;
                             let value = value.ok_or(Error::ExpectedExpression)?;
-                            let new_env = Environment::Cons(name, value, Box::new(env));
+                            let new_env = Environment::cons(name, value, env);
                             Ok((None, new_env))
                         }
                     },
@@ -299,7 +299,7 @@ pub fn eval(
                                     let (arg, caller_env) = eval(arg, caller_env)?;
                                     let arg = arg.ok_or(Error::ExpectedExpression)?;
 
-                                    let new_env = Environment::Cons(param, arg, Box::new(new_env));
+                                    let new_env = Environment::cons(param, arg, new_env);
 
                                     create_call_env(params, args, new_env, caller_env)
                                 }
@@ -307,7 +307,7 @@ pub fn eval(
                             }
                         }
 
-                        let (new_env, env) = create_call_env(params, rand, *closure_env, env)?;
+                        let (new_env, env) = create_call_env(params, rand, closure_env, env)?;
                         let (result, _) = eval(*body, new_env)?;
                         Ok((result, env))
                     }

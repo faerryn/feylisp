@@ -39,10 +39,10 @@ impl std::fmt::Display for ListError {
 }
 
 impl List {
-    pub fn cons(expr: Expression, tail: List) -> List {
-        List::Cons(Box::new(expr), Box::new(tail))
+    #[must_use] pub fn cons(expr: Expression, list: List) -> List {
+        List::Cons(Box::new(expr), Box::new(list))
     }
-    pub fn decons(self) -> Option<(Expression, List)> {
+    #[must_use] pub fn decons(self) -> Option<(Expression, List)> {
         if let List::Cons(head, tail) = self {
             Some((*head, *tail))
         } else {
@@ -165,13 +165,13 @@ pub enum ListMonop {
 pub struct Closure {
     pub params: List,
     pub body: Box<Expression>,
-    pub env: Box<Environment>,
+    pub env: Environment,
 }
 
 
 #[derive(Debug, Clone)]
 pub enum Environment {
-    Cons(String, Expression, Box<Environment>),
+    Cons(String, Box<Expression>, Box<Environment>),
     Nil,
 }
 
@@ -179,10 +179,14 @@ impl Environment {
     #[must_use]
     pub fn get(&self, ident: &str) -> Option<Expression> {
         match self {
-            Environment::Cons(key, val, _) if key == ident => Some(val.clone()),
+            Environment::Cons(name, value, _) if name == ident => Some(*value.clone()),
             Environment::Cons(_, _, parent) => parent.get(ident),
             Environment::Nil => None,
         }
+    }
+
+    #[must_use] pub fn cons(name: String, value: Expression, env: Environment) -> Environment {
+        Environment::Cons(name, Box::new(value), Box::new(env))
     }
 }
 
@@ -192,7 +196,7 @@ impl Default for Environment {
         for (name, value) in BUILTIN_NAME_ALIST {
             result = Environment::Cons(
                 name.to_owned(),
-                Expression::Builtin(value),
+                Box::new(Expression::Builtin(value)),
                 Box::new(result),
             );
         }
@@ -203,8 +207,8 @@ impl Default for Environment {
 impl std::fmt::Display for Environment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Environment::Cons(key, val, parent) => {
-                write!(f, "{}: {}", key, val)?;
+            Environment::Cons(name, value, parent) => {
+                write!(f, "{}: {}", name, value)?;
                 match **parent {
                     Environment::Cons(_, _, _) => write!(f, ", {}", parent),
                     Environment::Nil => Ok(()),
