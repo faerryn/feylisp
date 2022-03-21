@@ -1,19 +1,8 @@
-use clap::Parser;
 use feylisp::{eval, lex, parse, Environment, EvalError, Expression, LexError, ParseError};
 
-#[derive(Debug, Parser)]
-struct Args {
-    files: Vec<String>,
-
-    #[clap(short, long)]
-    repl: bool,
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-
     let mut env = Environment::default();
-    for file in &args.files {
+    for file in std::env::args().skip(1) {
         let src = std::fs::read_to_string(file)?;
         let (exprs, new_env) = eval_src(&src, env)?;
         for expr in exprs {
@@ -22,10 +11,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         env = new_env;
     }
 
-    if args.repl || args.files.is_empty() {
-        env = repl(env)?;
-        println!("[{}]", env);
-    }
+    env = repl(env)?;
+    println!("[{}]", env);
 
     Ok(())
 }
