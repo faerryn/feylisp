@@ -22,8 +22,8 @@ mod tests {
     fn fibonnaci() {
         let src = "
 (define Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define fib (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2)))))))
-((Y fib) 10)
+(define fib (Y (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2))))))))
+(fib 10)
 ";
         let env = Environment::default();
         let result = eval_src(src, env);
@@ -55,12 +55,12 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
 
     let mut result = vec![];
     let mut state = State::Start;
-    let mut prev = 0;
+    let mut start_index = 0;
 
-    for (curr, ch) in src.chars().enumerate() {
+    for (curr_index, ch) in src.chars().enumerate() {
         match state {
             State::Start => {
-                prev = curr;
+                start_index = curr_index;
                 match ch {
                     ' ' | '\t' | '\n' | '\r' => {
                         state = State::Start;
@@ -86,16 +86,16 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
             }
             State::Sign => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
@@ -108,16 +108,16 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
             },
             State::Number => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Number(src[prev..curr].parse::<_>()?));
+                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Number(src[prev..curr].parse::<_>()?));
+                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Number(src[prev..curr].parse::<_>()?));
+                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
@@ -130,16 +130,16 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
             },
             State::Symbol => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Symbol(src[prev..curr].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
@@ -153,10 +153,10 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, LexError> {
     match state {
         State::Start => {}
         State::Number => {
-            result.push(Lexeme::Number(src[prev..].parse::<_>()?));
+            result.push(Lexeme::Number(src[start_index..].parse::<_>()?));
         }
         State::Symbol | State::Sign => {
-            result.push(Lexeme::Symbol(src[prev..].to_owned()));
+            result.push(Lexeme::Symbol(src[start_index..].to_owned()));
         }
     }
 
