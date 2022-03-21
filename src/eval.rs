@@ -196,57 +196,10 @@ pub fn eval(
                             Ok((Some(Expression::List(List::cons(head, tail))), env))
                         }
                         Builtin::List => {
-                            fn list_eval(
-                                list: List,
-                                env: Environment,
-                            ) -> Result<(List, Environment), Error> {
-                                if let List::Cons(head, tail) = list {
-                                    let (head, tail) = (*head, *tail);
-                                    let (head, env) = eval(head, env)?;
-                                    let head = head.ok_or(Error::Malformed(Builtin::List))?;
-                                    let (tail, env) = list_eval(tail, env)?;
-                                    Ok((List::cons(head, tail), env))
-                                } else {
-                                    Ok((list, env))
-                                }
-                            }
                             let (result, env) = list_eval(rand, env)?;
                             Ok((Some(Expression::List(result)), env))
                         }
                         Builtin::Let => {
-                            fn let_env(
-                                varlist: List,
-                                new_env: Environment,
-                                caller_env: Environment,
-                            ) -> Result<(Environment, Environment), Error>
-                            {
-                                if let List::Cons(head, tail) = varlist {
-                                    let (head, tail) = (*head, *tail);
-                                    let head = match head {
-                                        Expression::List(list) => Ok(list),
-                                        _ => Err(Error::Malformed(Builtin::Let)),
-                                    }?;
-                                    let (name, head) =
-                                        List::decons(head).ok_or(Error::Malformed(Builtin::Let))?;
-                                    let name = match name {
-                                        Expression::Symbol(symbol) => Ok(symbol),
-                                        _ => Err(Error::Malformed(Builtin::Let)),
-                                    }?;
-                                    let (value, head) =
-                                        head.decons().ok_or(Error::Malformed(Builtin::Let))?;
-                                    if matches!(head, List::Cons(_, _)) {
-                                        return Err(Error::Malformed(Builtin::Let));
-                                    }
-
-                                    let (value, caller_env) = eval(value, caller_env)?;
-                                    let value = value.ok_or(Error::ExpectedExpression)?;
-                                    let new_env = Environment::cons(name, value, new_env);
-                                    let_env(tail, new_env, caller_env)
-                                } else {
-                                    Ok((new_env, caller_env))
-                                }
-                            }
-
                             let (varlist, rand) =
                                 List::decons(rand).ok_or(Error::Malformed(builtin))?;
                             let varlist = match varlist {
@@ -295,33 +248,7 @@ pub fn eval(
                         body,
                         env: closure_env,
                     }) => {
-                        fn call_closure_env(
-                            params: List,
-                            args: List,
-                            new_env: Environment,
-                            caller_env: Environment,
-                        ) -> Result<(Environment, Environment), Error> {
-                            match (params, args) {
-                                (List::Nil, List::Nil) => Ok((new_env, caller_env)),
-                                (List::Cons(param, params), List::Cons(arg, args)) => {
-                                    let (param, params) = (*param, *params);
-                                    let (arg, args) = (*arg, *args);
-                                    let param = match param {
-                                        Expression::Symbol(symbol) => Ok(symbol),
-                                        _ => Err(Error::MalformedApply),
-                                    }?;
-                                    let (arg, caller_env) = eval(arg, caller_env)?;
-                                    let arg = arg.ok_or(Error::ExpectedExpression)?;
-
-                                    let new_env = Environment::cons(param, arg, new_env);
-
-                                    call_closure_env(params, args, new_env, caller_env)
-                                }
-                                _ => Err(Error::MalformedApply),
-                            }
-                        }
-
-                        let (new_env, env) = call_closure_env(params, rand, closure_env, env)?;
+                        let (new_env, env) = call_env(params, rand, closure_env, env, true)?;
                         let (result, _) = eval(*body, new_env)?;
                         Ok((result, env))
                     }
@@ -330,31 +257,7 @@ pub fn eval(
                         body,
                         env: closure_env,
                     }) => {
-                        fn call_macro_env(
-                            params: List,
-                            args: List,
-                            new_env: Environment,
-                            caller_env: Environment,
-                        ) -> Result<(Environment, Environment), Error> {
-                            match (params, args) {
-                                (List::Nil, List::Nil) => Ok((new_env, caller_env)),
-                                (List::Cons(param, params), List::Cons(arg, args)) => {
-                                    let (param, params) = (*param, *params);
-                                    let (arg, args) = (*arg, *args);
-                                    let param = match param {
-                                        Expression::Symbol(symbol) => Ok(symbol),
-                                        _ => Err(Error::MalformedApply),
-                                    }?;
-
-                                    let new_env = Environment::cons(param, arg, new_env);
-
-                                    call_macro_env(params, args, new_env, caller_env)
-                                }
-                                _ => Err(Error::MalformedApply),
-                            }
-                        }
-
-                        let (new_env, env) = call_macro_env(params, rand, closure_env, env)?;
+                        let (new_env, env) = call_env(params, rand, closure_env, env, false)?;
                         let (result, _) = eval(*body, new_env)?;
                         let result = result.ok_or(Error::ExpectedExpression)?;
                         eval(result, env)
@@ -366,5 +269,79 @@ pub fn eval(
             }
         }
         _ => Ok((Some(expr), env)),
+    }
+}
+
+fn let_env(
+    varlist: List,
+    new_env: Environment,
+    caller_env: Environment,
+) -> Result<(Environment, Environment), Error> {
+    if let List::Cons(head, tail) = varlist {
+        let (head, tail) = (*head, *tail);
+        let head = match head {
+            Expression::List(list) => Ok(list),
+            _ => Err(Error::Malformed(Builtin::Let)),
+        }?;
+        let (name, head) = List::decons(head).ok_or(Error::Malformed(Builtin::Let))?;
+        let name = match name {
+            Expression::Symbol(symbol) => Ok(symbol),
+            _ => Err(Error::Malformed(Builtin::Let)),
+        }?;
+        let (value, head) = head.decons().ok_or(Error::Malformed(Builtin::Let))?;
+        if matches!(head, List::Cons(_, _)) {
+            return Err(Error::Malformed(Builtin::Let));
+        }
+
+        let (value, caller_env) = eval(value, caller_env)?;
+        let value = value.ok_or(Error::ExpectedExpression)?;
+        let new_env = Environment::cons(name, value, new_env);
+        let_env(tail, new_env, caller_env)
+    } else {
+        Ok((new_env, caller_env))
+    }
+}
+
+fn list_eval(list: List, env: Environment) -> Result<(List, Environment), Error> {
+    if let List::Cons(head, tail) = list {
+        let (head, tail) = (*head, *tail);
+        let (head, env) = eval(head, env)?;
+        let head = head.ok_or(Error::Malformed(Builtin::List))?;
+        let (tail, env) = list_eval(tail, env)?;
+        Ok((List::cons(head, tail), env))
+    } else {
+        Ok((list, env))
+    }
+}
+
+fn call_env(
+    params: List,
+    args: List,
+    new_env: Environment,
+    caller_env: Environment,
+    eval_args: bool,
+) -> Result<(Environment, Environment), Error> {
+    match (params, args) {
+        (List::Nil, List::Nil) => Ok((new_env, caller_env)),
+        (List::Cons(param, params), List::Cons(arg, args)) => {
+            let (param, params) = (*param, *params);
+            let (arg, args) = (*arg, *args);
+            let param = match param {
+                Expression::Symbol(symbol) => Ok(symbol),
+                _ => Err(Error::MalformedApply),
+            }?;
+            let (arg, caller_env) = if eval_args {
+                let (arg, caller_env) = eval(arg, caller_env)?;
+                let arg = arg.ok_or(Error::ExpectedExpression)?;
+                (arg, caller_env)
+            } else {
+                (arg, caller_env)
+            };
+
+            let new_env = Environment::cons(param, arg, new_env);
+
+            call_env(params, args, new_env, caller_env, eval_args)
+        }
+        _ => Err(Error::MalformedApply),
     }
 }
