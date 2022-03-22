@@ -85,6 +85,34 @@ impl Iterator for ListIterator {
     }
 }
 
+impl<'a> IntoIterator for &'a List {
+    type Item = &'a Expression;
+
+    type IntoIter = ListVisitor<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ListVisitor { list: self }
+    }
+}
+
+pub struct ListVisitor<'a> {
+    list: &'a List,
+}
+
+impl<'a> Iterator for ListVisitor<'a> {
+    type Item = &'a Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.list {
+            List::Cons(expr, tail) => {
+                self.list = tail;
+                Some(expr)
+            },
+            List::Nil => None,
+        }
+    }
+}
+
 impl std::fmt::Display for List {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
