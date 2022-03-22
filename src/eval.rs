@@ -317,31 +317,23 @@ fn list_eval(list: List, env: Environment) -> Result<(List, Environment), Error>
 fn call_env(
     params: List,
     args: List,
-    new_env: Environment,
-    caller_env: Environment,
+    mut new_env: Environment,
+    mut caller_env: Environment,
     eval_args: bool,
 ) -> Result<(Environment, Environment), Error> {
-    match (params, args) {
-        (List::Nil, List::Nil) => Ok((new_env, caller_env)),
-        (List::Cons(param, params), List::Cons(arg, args)) => {
-            let (param, params) = (*param, *params);
-            let (arg, args) = (*arg, *args);
-            let param = match param {
-                Expression::Symbol(symbol) => Ok(symbol),
-                _ => Err(Error::MalformedApply),
-            }?;
-            let (arg, caller_env) = if eval_args {
-                let (arg, caller_env) = eval(arg, caller_env)?;
-                let arg = arg.ok_or(Error::ExpectedExpression)?;
-                (arg, caller_env)
-            } else {
-                (arg, caller_env)
-            };
-
-            let new_env = Environment::cons(param, arg, new_env);
-
-            call_env(params, args, new_env, caller_env, eval_args)
+    let mut args = args.into_iter();
+    for param in params.into_iter() {
+        let param = match param {
+            Expression::Symbol(symbol) => symbol,
+            _ => return Err(Error::MalformedApply),
+        };
+        let mut arg = args.next().ok_or(Error::MalformedApply)?;
+        if eval_args {
+            let (new_arg, new_caller_env) = eval(arg, caller_env)?;
+            arg = new_arg.ok_or(Error::MalformedApply)?;
+            caller_env = new_caller_env;
         }
-        _ => Err(Error::MalformedApply),
+        new_env = Environment::cons(param, arg, new_env);
     }
+    Ok((new_env, caller_env))
 }

@@ -83,9 +83,9 @@ impl Iterator for ListIterator {
     type Item = Expression;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut scratch = List::Nil;
-        std::mem::swap(&mut self.list, &mut scratch);
-        if let List::Cons(expr, tail) = scratch {
+        let mut temp = List::Nil;
+        std::mem::swap(&mut self.list, &mut temp);
+        if let List::Cons(expr, tail) = temp {
             self.list = *tail;
             Some(*expr)
         } else {
