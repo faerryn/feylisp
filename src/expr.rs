@@ -46,6 +46,18 @@ impl List {
     }
 }
 
+impl FromIterator<Expression> for List {
+    fn from_iter<T: IntoIterator<Item = Expression>>(iter: T) -> Self {
+        let mut iter = iter.into_iter();
+
+        if let Some(expr) = iter.next() {
+            List::Cons(Box::new(expr), Box::new(iter.collect()))
+        } else {
+            List::Nil
+        }
+    }
+}
+
 impl<'a> IntoIterator for &'a List {
     type Item = &'a Expression;
 
