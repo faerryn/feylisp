@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use feylisp::{eval_src, expr::{Expression, Environment}};
+    use feylisp::{eval::Environment, eval_src, expr::Expression};
     #[test]
     fn factorial() {
         let src = "

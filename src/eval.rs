@@ -1,7 +1,56 @@
 use crate::expr::{
-    ArBinop, Builtin, Closure, Environment, Expression, List, ListMonop, NumBinop, OrdBinop,
-    TestMonop,
+    ArBinop, Builtin, Closure, Expression, List, ListMonop, NumBinop, OrdBinop, TestMonop,
 };
+
+#[derive(Debug, Clone)]
+pub enum Environment {
+    Cons(String, Box<Expression>, Box<Environment>),
+    Nil,
+}
+
+impl Environment {
+    #[must_use]
+    pub fn standard_env() -> Self {
+        let mut result = Environment::Nil;
+        for (name, value) in crate::expr::BUILTIN_NAME_ALIST {
+            result = Environment::Cons(
+                name.to_owned(),
+                Box::new(Expression::Builtin(value)),
+                Box::new(result),
+            );
+        }
+        result
+    }
+
+    #[must_use]
+    pub fn get(&self, ident: &str) -> Option<Expression> {
+        match self {
+            Environment::Cons(name, value, _) if name == ident => Some(*value.clone()),
+            Environment::Cons(_, _, parent) => parent.get(ident),
+            Environment::Nil => None,
+        }
+    }
+
+    #[must_use]
+    pub fn cons(name: String, value: Expression, env: Environment) -> Environment {
+        Environment::Cons(name, Box::new(value), Box::new(env))
+    }
+}
+
+impl std::fmt::Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Environment::Cons(name, value, parent) => {
+                write!(f, "{}: {}", name, value)?;
+                match **parent {
+                    Environment::Cons(_, _, _) => write!(f, ", {}", parent),
+                    Environment::Nil => Ok(()),
+                }
+            }
+            Environment::Nil => Ok(()),
+        }
+    }
+}
 
 #[must_use]
 pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environment) {

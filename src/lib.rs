@@ -3,15 +3,13 @@ pub mod expr;
 pub mod lex;
 pub mod parse;
 
-use crate::eval::eval;
-use crate::expr::{Environment, Expression};
+use crate::eval::{eval, Environment};
+use crate::expr::Expression;
 use crate::lex::lex;
 use crate::parse::parse;
 
-pub fn eval_src(
-    src: &str,
-    mut env: Environment,
-) -> (Vec<Expression>, Environment) {
+#[must_use]
+pub fn eval_src(src: &str, mut env: Environment) -> (Vec<Expression>, Environment) {
     let exprs = parse(lex(src)).expect("parse fail");
     let mut result = vec![];
     result.reserve(exprs.len());
@@ -27,6 +25,7 @@ pub fn eval_src(
     (result, env)
 }
 
+#[must_use]
 pub fn repl(mut env: Environment) -> Environment {
     use std::io::prelude::*;
     let stdin = std::io::stdin();
@@ -55,13 +54,13 @@ pub fn repl(mut env: Environment) -> Environment {
                 print!("> ");
                 stdout.flush().expect("broken stdout");
             }
-            Err(parse::Error::Unclosed) => {},
+            Err(parse::Error::Unclosed) => {}
             Err(parse::Error::UnexpectedClose) => {
                 src.clear();
                 println!("unexpected ')'");
                 print!("> ");
                 stdout.flush().expect("broken stdout");
-            },
+            }
         }
     }
 

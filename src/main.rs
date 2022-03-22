@@ -1,4 +1,4 @@
-use feylisp::{eval_src, expr::Environment, repl};
+use feylisp::{eval::Environment, eval_src, repl};
 
 fn main() {
     let mut env = Environment::standard_env();
