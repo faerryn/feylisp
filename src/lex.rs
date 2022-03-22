@@ -26,6 +26,9 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
         match state {
             State::Start => {
                 start_index = curr_index;
+                sign = 0;
+                mag = 0;
+
                 match ch {
                     ' ' | '\t' | '\n' | '\r' => {
                         state = State::Start;
@@ -48,7 +51,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     }
                     '0'..='9' => {
                         sign = 1;
-                        mag += ch as i32 - '0' as i32;
+                        mag = 10 * mag + (ch as i32 - '0' as i32);
                         state = State::Number;
                     }
                     _ => {
@@ -72,7 +75,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     state = State::Start;
                 }
                 '0'..='9' => {
-                    mag += ch as i32 - '0' as i32;
+                    mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
                 }
                 _ => {
@@ -95,6 +98,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     state = State::Start;
                 }
                 '0'..='9' => {
+                    mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
                 }
                 _ => {

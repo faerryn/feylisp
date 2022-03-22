@@ -9,7 +9,7 @@ mod tests {
   ((Y fact) 5))
 ";
         let env = Environment::standard_env();
-        let (exprs, _) = eval_src(src, env).unwrap();
+        let (exprs, _) = eval_src(src, env);
         assert!(matches!(exprs.as_slice(), [Expression::Number(120)]));
     }
 
@@ -21,7 +21,7 @@ mod tests {
 (fib 10)
 ";
         let env = Environment::standard_env();
-        let (exprs, _) = eval_src(src, env).unwrap();
+        let (exprs, _) = eval_src(src, env);
         assert!(matches!(exprs.as_slice(), [Expression::Number(55)]));
     }
 }

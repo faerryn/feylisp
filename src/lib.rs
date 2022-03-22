@@ -8,24 +8,11 @@ use crate::expr::{Environment, Expression};
 use crate::lex::lex;
 use crate::parse::parse;
 
-#[derive(Debug)]
-pub enum EvalSrcError {
-    Parse(parse::Error),
-}
-
-impl std::fmt::Display for EvalSrcError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for EvalSrcError {}
-
 pub fn eval_src(
     src: &str,
     mut env: Environment,
-) -> Result<(Vec<Expression>, Environment), EvalSrcError> {
-    let exprs = parse(lex(src)).map_err(EvalSrcError::Parse)?;
+) -> (Vec<Expression>, Environment) {
+    let exprs = parse(lex(src)).expect("parse fail");
     let mut result = vec![];
     result.reserve(exprs.len());
 
@@ -37,10 +24,10 @@ pub fn eval_src(
         env = new_env;
     }
 
-    Ok((result, env))
+    (result, env)
 }
 
-pub fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Error>> {
+pub fn repl(mut env: Environment) -> Environment {
     use std::io::prelude::*;
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
@@ -49,24 +36,34 @@ pub fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Err
     let mut line = String::new();
 
     print!("> ");
-    stdout.flush()?;
+    stdout.flush().expect("broken stdout");
 
-    while stdin.read_line(&mut line)? > 0 {
+    while stdin.read_line(&mut line).expect("broken stdin") > 0 {
         src.push_str(&line);
         line.clear();
-        if let Ok(exprs) = parse(lex(&src)) { // sketchy
-            src.clear();
-            for expr in exprs {
-                let (expr, new_env) = eval(expr, env);
-                env = new_env;
-                if let Some(expr) = expr {
-                    println!("{}", expr);
+        match parse(lex(&src)) {
+            Ok(exprs) => {
+                for expr in exprs {
+                    let (expr, new_env) = eval(expr, env);
+                    env = new_env;
+                    if let Some(expr) = expr {
+                        println!("{}", expr);
+                    }
                 }
+
+                src.clear();
+                print!("> ");
+                stdout.flush().expect("broken stdout");
             }
-            print!("> ");
-            stdout.flush()?;
+            Err(parse::Error::Unclosed) => {},
+            Err(parse::Error::UnexpectedClose) => {
+                src.clear();
+                println!("unexpected ')'");
+                print!("> ");
+                stdout.flush().expect("broken stdout");
+            },
         }
     }
 
-    Ok(env)
+    env
 }

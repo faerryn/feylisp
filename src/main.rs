@@ -1,25 +1,17 @@
-use feylisp::{eval_src, repl, expr::Environment};
+use feylisp::{eval_src, expr::Environment, repl};
 
 fn main() {
     let mut env = Environment::standard_env();
     for file in std::env::args().skip(1) {
         if let Ok(src) = std::fs::read_to_string(file) {
-            match eval_src(&src, env) {
-                Ok((exprs, new_env)) => {
-                    for expr in exprs {
-                        println!("{}", expr);
-                    }
-                    env = new_env;
-                }
-                Err(err) => todo!("{:?}", err),
+            let (exprs, new_env) = eval_src(&src, env);
+            for expr in exprs {
+                println!("{}", expr);
             }
+            env = new_env;
         }
     }
 
-    match repl(env) {
-        Ok(env) => {
-            println!("[{}]", env);
-        }
-        Err(err) => todo!("{:?}", err),
-    }
+    let env = repl(env);
+    println!("[{}]", env);
 }
