@@ -6,9 +6,8 @@ pub enum Lexeme {
     Symbol(String),
 }
 
-pub type Error = std::num::ParseIntError;
-
-pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
+#[must_use]
+pub fn lex(src: &str) -> Vec<Lexeme> {
     enum State {
         Start,
         Sign,
@@ -19,6 +18,9 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
     let mut result = vec![];
     let mut state = State::Start;
     let mut start_index = 0;
+
+    let mut sign = 0;
+    let mut mag = 0;
 
     for (curr_index, ch) in src.chars().enumerate() {
         match state {
@@ -36,10 +38,17 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
                         result.push(Lexeme::Close);
                         state = State::Start;
                     }
-                    '+' | '-' => {
+                    '+' => {
+                        sign = 1;
+                        state = State::Sign;
+                    }
+                    '-' => {
+                        sign = -1;
                         state = State::Sign;
                     }
                     '0'..='9' => {
+                        sign = 1;
+                        mag += ch as i32 - '0' as i32;
                         state = State::Number;
                     }
                     _ => {
@@ -63,6 +72,7 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
                     state = State::Start;
                 }
                 '0'..='9' => {
+                    mag += ch as i32 - '0' as i32;
                     state = State::Number;
                 }
                 _ => {
@@ -71,16 +81,16 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
             },
             State::Number => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
+                    result.push(Lexeme::Number(sign * mag));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
+                    result.push(Lexeme::Number(sign * mag));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Number(src[start_index..curr_index].parse::<_>()?));
+                    result.push(Lexeme::Number(sign * mag));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
@@ -116,12 +126,12 @@ pub fn lex(src: &str) -> Result<Vec<Lexeme>, Error> {
     match state {
         State::Start => {}
         State::Number => {
-            result.push(Lexeme::Number(src[start_index..].parse::<_>()?));
+            result.push(Lexeme::Number(sign * mag));
         }
         State::Symbol | State::Sign => {
             result.push(Lexeme::Symbol(src[start_index..].to_owned()));
         }
     }
 
-    Ok(result)
+    result
 }

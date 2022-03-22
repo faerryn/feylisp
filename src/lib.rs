@@ -10,7 +10,6 @@ use crate::parse::parse;
 
 #[derive(Debug)]
 pub enum EvalSrcError {
-    Lex(lex::Error),
     Parse(parse::Error),
     Eval(eval::Error),
 }
@@ -27,7 +26,7 @@ pub fn eval_src(
     src: &str,
     mut env: Environment,
 ) -> Result<(Vec<Expression>, Environment), EvalSrcError> {
-    let exprs = parse(lex(src).map_err(EvalSrcError::Lex)?).map_err(EvalSrcError::Parse)?;
+    let exprs = parse(lex(src)).map_err(EvalSrcError::Parse)?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
@@ -56,7 +55,7 @@ pub fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Err
     while stdin.read_line(&mut line)? > 0 {
         src.push_str(&line);
         line.clear();
-        if let Some(exprs) = lex(&src).ok().and_then(|src| parse(src).ok()) {
+        if let Ok(exprs) = parse(lex(&src)) { // sketchy
             src.clear();
             for expr in exprs {
                 let (expr, new_env) = eval(expr, env)?;

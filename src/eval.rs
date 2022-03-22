@@ -322,7 +322,7 @@ fn call_env(
     eval_args: bool,
 ) -> Result<(Environment, Environment), Error> {
     let mut args = args.into_iter();
-    for param in params.into_iter() {
+    for param in params {
         let param = match param {
             Expression::Symbol(symbol) => symbol,
             _ => return Err(Error::MalformedApply),
