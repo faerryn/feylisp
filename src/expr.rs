@@ -53,15 +53,44 @@ impl List {
     }
 }
 
-impl From<Vec<Expression>> for List {
-    fn from(vec: Vec<Expression>) -> Self {
-        let mut result = List::Nil;
+impl FromIterator<Expression> for List {
+    fn from_iter<T: IntoIterator<Item = Expression>>(iter: T) -> Self {
+        let mut iter = iter.into_iter();
 
-        for expr in vec.into_iter().rev() {
-            result = List::Cons(Box::new(expr), Box::new(result));
+        if let Some(expr) = iter.next() {
+            List::Cons(Box::new(expr), Box::new(iter.collect()))
+        } else {
+            List::Nil
         }
+    }
+}
 
-        result
+impl IntoIterator for List {
+    type Item = Expression;
+
+    type IntoIter = ListIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ListIterator { list: self }
+    }
+}
+
+pub struct ListIterator {
+    list: List,
+}
+
+impl Iterator for ListIterator {
+    type Item = Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut scratch = List::Nil;
+        std::mem::swap(&mut self.list, &mut scratch);
+        if let List::Cons(expr, tail) = scratch {
+            self.list = *tail;
+            Some(*expr)
+        } else {
+            None
+        }
     }
 }
 
@@ -186,6 +215,19 @@ pub enum Environment {
 
 impl Environment {
     #[must_use]
+    pub fn standard_env() -> Self {
+        let mut result = Environment::Nil;
+        for (name, value) in BUILTIN_NAME_ALIST {
+            result = Environment::Cons(
+                name.to_owned(),
+                Box::new(Expression::Builtin(value)),
+                Box::new(result),
+            );
+        }
+        result
+    }
+
+    #[must_use]
     pub fn get(&self, ident: &str) -> Option<Expression> {
         match self {
             Environment::Cons(name, value, _) if name == ident => Some(*value.clone()),
@@ -197,20 +239,6 @@ impl Environment {
     #[must_use]
     pub fn cons(name: String, value: Expression, env: Environment) -> Environment {
         Environment::Cons(name, Box::new(value), Box::new(env))
-    }
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        let mut result = Environment::Nil;
-        for (name, value) in BUILTIN_NAME_ALIST {
-            result = Environment::Cons(
-                name.to_owned(),
-                Box::new(Expression::Builtin(value)),
-                Box::new(result),
-            );
-        }
-        result
     }
 }
 

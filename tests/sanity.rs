@@ -8,7 +8,7 @@ mod tests {
       (fact (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
   ((Y fact) 5))
 ";
-        let env = Environment::default();
+        let env = Environment::standard_env();
         let (exprs, _) = eval_src(src, env).unwrap();
         assert!(matches!(exprs.as_slice(), [Expression::Number(120)]));
     }
@@ -20,7 +20,7 @@ mod tests {
 (define fib (Y (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2))))))))
 (fib 10)
 ";
-        let env = Environment::default();
+        let env = Environment::standard_env();
         let (exprs, _) = eval_src(src, env).unwrap();
         assert!(matches!(exprs.as_slice(), [Expression::Number(55)]));
     }

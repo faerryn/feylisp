@@ -27,7 +27,7 @@ pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, Error> {
             }
             Lexeme::Close => {
                 let mut new_top = stack.pop().ok_or(Error::UnexpectedClose)?;
-                new_top.push(Expression::List(top.into()));
+                new_top.push(Expression::List(top.into_iter().collect::<_>()));
                 top = new_top;
             }
             Lexeme::Number(number) => {
