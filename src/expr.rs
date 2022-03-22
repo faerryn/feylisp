@@ -46,47 +46,6 @@ impl List {
     }
 }
 
-impl FromIterator<Expression> for List {
-    fn from_iter<T: IntoIterator<Item = Expression>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
-
-        if let Some(expr) = iter.next() {
-            List::Cons(Box::new(expr), Box::new(iter.collect()))
-        } else {
-            List::Nil
-        }
-    }
-}
-
-impl IntoIterator for List {
-    type Item = Expression;
-
-    type IntoIter = ListIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ListIterator { list: self }
-    }
-}
-
-pub struct ListIterator {
-    list: List,
-}
-
-impl Iterator for ListIterator {
-    type Item = Expression;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut scratch = List::Nil;
-        std::mem::swap(&mut self.list, &mut scratch);
-        if let List::Cons(expr, tail) = scratch {
-            self.list = *tail;
-            Some(*expr)
-        } else {
-            None
-        }
-    }
-}
-
 impl<'a> IntoIterator for &'a List {
     type Item = &'a Expression;
 
