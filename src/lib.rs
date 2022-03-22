@@ -11,7 +11,6 @@ use crate::parse::parse;
 #[derive(Debug)]
 pub enum EvalSrcError {
     Parse(parse::Error),
-    Eval(eval::Error),
 }
 
 impl std::fmt::Display for EvalSrcError {
@@ -31,7 +30,7 @@ pub fn eval_src(
     result.reserve(exprs.len());
 
     for expr in exprs {
-        let (expr, new_env) = eval(expr, env).map_err(EvalSrcError::Eval)?;
+        let (expr, new_env) = eval(expr, env);
         if let Some(expr) = expr {
             result.push(expr);
         }
@@ -58,7 +57,7 @@ pub fn repl(mut env: Environment) -> Result<Environment, Box<dyn std::error::Err
         if let Ok(exprs) = parse(lex(&src)) { // sketchy
             src.clear();
             for expr in exprs {
-                let (expr, new_env) = eval(expr, env)?;
+                let (expr, new_env) = eval(expr, env);
                 env = new_env;
                 if let Some(expr) = expr {
                     println!("{}", expr);

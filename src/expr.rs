@@ -29,15 +29,6 @@ pub enum List {
     Nil,
 }
 
-#[derive(Debug)]
-pub struct ListError;
-
-impl std::fmt::Display for ListError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 impl List {
     #[must_use]
     pub fn cons(expr: Expression, list: List) -> List {
@@ -109,7 +100,7 @@ impl std::fmt::Display for List {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Builtin {
     Quote,
     Lambda,
@@ -161,20 +152,20 @@ impl std::fmt::Display for Builtin {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TestMonop {
     Number,
     List,
     Nil,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     OrdBinop(OrdBinop),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -182,13 +173,13 @@ pub enum ArBinop {
     Div,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum OrdBinop {
     Eql,
     Lt,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
