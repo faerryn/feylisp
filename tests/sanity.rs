@@ -4,9 +4,9 @@ mod tests {
     #[test]
     fn factorial() {
         let src = "
-(let ((Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-      (fact (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
-  ((Y fact) 5))
+(let ((Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
+      (fact-partial (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
+  ((Z fact-partial) 5))
 ";
         let env = Environment::standard_env();
         let (exprs, _) = eval_src(src, env);
@@ -16,8 +16,8 @@ mod tests {
     #[test]
     fn fibonnaci() {
         let src = "
-(define Y (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define fib (Y (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2))))))))
+(define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
+(define fib (Z (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2))))))))
 (fib 10)
 ";
         let env = Environment::standard_env();
