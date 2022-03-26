@@ -1,5 +1,4 @@
-use crate::expr::Expression;
-use crate::lex::Lexeme;
+use crate::{expr::Expression, lex::Lexeme};
 
 #[derive(Debug)]
 pub enum Error {

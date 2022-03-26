@@ -95,7 +95,7 @@ impl std::fmt::Display for List {
                     write!(f, " {}", expr)?;
                 }
                 Ok(())
-            },
+            }
             List::Nil => Ok(()),
         }
     }

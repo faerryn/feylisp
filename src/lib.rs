@@ -3,10 +3,14 @@ pub mod expr;
 pub mod lex;
 pub mod parse;
 
-use crate::eval::{eval, Environment};
-use crate::expr::Expression;
-use crate::lex::lex;
-use crate::parse::parse;
+use crate::{
+    eval::{eval, Environment},
+    expr::Expression,
+    lex::lex,
+    parse::parse,
+};
+
+use std::io::prelude::*;
 
 #[must_use]
 pub fn eval_src(src: &str, mut env: Environment) -> (Vec<Expression>, Environment) {
@@ -27,7 +31,6 @@ pub fn eval_src(src: &str, mut env: Environment) -> (Vec<Expression>, Environmen
 
 #[must_use]
 pub fn repl(mut env: Environment) -> Environment {
-    use std::io::prelude::*;
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
