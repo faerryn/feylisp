@@ -1,9 +1,10 @@
-use crate::{expr::Expression, lex::Lexeme};
+use crate::{expr::Expression, expr::Builtin, lex::Lexeme};
 
 #[derive(Debug)]
 pub enum Error {
-    Unclosed,
     UnexpectedClose,
+    UnclosedList,
+    UnclosedQuote,
 }
 
 impl std::fmt::Display for Error {
@@ -14,37 +15,46 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, Error> {
-    let mut stack = vec![];
-    let mut top = vec![];
-
-    for lexeme in src {
+fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expression>, Error> {
+    if let Some(lexeme) = iter.next() {
         match lexeme {
             Lexeme::Open => {
-                stack.push(top);
-                top = vec![];
+                let mut list = vec![];
+                loop {
+                    match parse_helper::<_>(iter) {
+                        Ok(Some(elt)) => list.push(elt),
+                        Err(Error::UnexpectedClose) => break,
+                        Ok(None) => return Err(Error::UnclosedList),
+                        Err(err) => return Err(err),
+                    }
+                }
+                Ok(Some(Expression::List(list.into_iter().collect::<_>())))
             }
-            Lexeme::Close => {
-                let mut new_top = stack.pop().ok_or(Error::UnexpectedClose)?;
-                new_top.push(Expression::List(top.into_iter().collect::<_>()));
-                top = new_top;
-            }
-            Lexeme::Number(number) => {
-                top.push(Expression::Number(number));
-            }
-            Lexeme::Symbol(symbol) => {
-                top.push(match symbol.as_str() {
-                    "#t" => Expression::Bool(true),
-                    "#f" => Expression::Bool(false),
-                    _ => Expression::Symbol(symbol),
-                });
-            }
+            Lexeme::Close => Err(Error::UnexpectedClose),
+            Lexeme::Number(number) => Ok(Some(Expression::Number(number))),
+            Lexeme::Symbol(symbol) => Ok(Some(match symbol.as_str() {
+                "#t" => Expression::Bool(true),
+                "#f" => Expression::Bool(false),
+                _ => Expression::Symbol(symbol),
+            })),
+            Lexeme::Quote => {
+                if let Some(elt) = parse_helper(iter)? {
+                    Ok(Some(Expression::List(vec![Expression::Builtin(Builtin::Quote), elt].into_iter().collect::<_>())))
+                } else {
+                    Err(Error::UnclosedQuote)
+                }
+            },
         }
-    }
-
-    if stack.is_empty() {
-        Ok(top)
     } else {
-        Err(Error::Unclosed)
+        Ok(None)
     }
+}
+
+pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, Error> {
+    let mut result = vec![];
+    let mut iter = src.into_iter();
+    while let Some(expr) = parse_helper(&mut iter)? {
+        result.push(expr)
+    }
+    Ok(result)
 }

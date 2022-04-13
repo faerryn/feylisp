@@ -57,10 +57,16 @@ pub fn repl(mut env: Environment) -> Environment {
                 print!("> ");
                 stdout.flush().expect("broken stdout");
             }
-            Err(parse::Error::Unclosed) => {}
+            Err(parse::Error::UnclosedList) => {}
             Err(parse::Error::UnexpectedClose) => {
                 src.clear();
                 println!("unexpected ')'");
+                print!("> ");
+                stdout.flush().expect("broken stdout");
+            }
+            Err(parse::Error::UnclosedQuote) => {
+                src.clear();
+                println!("expected something after quote '");
                 print!("> ");
                 stdout.flush().expect("broken stdout");
             }

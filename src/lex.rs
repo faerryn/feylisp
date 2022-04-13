@@ -4,6 +4,7 @@ pub enum Lexeme {
     Close,
     Number(i32),
     Symbol(String),
+    Quote,
 }
 
 #[must_use]
@@ -31,6 +32,10 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
 
                 match ch {
                     ' ' | '\t' | '\n' | '\r' => {
+                        state = State::Start;
+                    }
+                    '\'' => {
+                        result.push(Lexeme::Quote);
                         state = State::Start;
                     }
                     '(' => {
