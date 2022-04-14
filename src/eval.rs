@@ -10,7 +10,7 @@ pub enum Environment {
 
 impl Environment {
     #[must_use]
-    pub fn standard_env() -> Self {
+    pub fn core_env() -> Self {
         let mut result = Environment::Nil;
         for (name, value) in crate::expr::BUILTIN_NAME_ALIST {
             result = Environment::Cons(
@@ -55,7 +55,13 @@ impl std::fmt::Display for Environment {
 #[must_use]
 pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environment) {
     match expr {
-        Expression::Symbol(ident) => (Some(env.get(&ident).expect("free variable")), env),
+        Expression::Symbol(ident) => (
+            Some(
+                env.get(&ident)
+                    .expect(&format!("free variable `{}'", ident)),
+            ),
+            env,
+        ),
         Expression::List(list) => match list {
             List::Cons(rator, rand) => {
                 let (rator, rand) = (*rator, *rand);
@@ -96,18 +102,25 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                             )
                         }
                         Builtin::Macro => {
-                            let (closure, rand) =
-                                List::decons(rand).expect("malformed macro closure");
-                            if matches!(rand, List::Cons(_, _)) {
-                                panic!("malformed macro closure");
-                            }
-                            let (closure, env) = eval(closure, env);
-                            let closure = closure.expect("malformed macro closure");
-                            let closure = match closure {
-                                Expression::Closure(closure) => closure,
-                                _ => panic!("malformed macro closure"),
+                            let (params, rand) =
+                                List::decons(rand).expect("malformed macro params");
+                            let params = match params {
+                                Expression::List(list) => list,
+                                _ => panic!("malformed macro params"),
                             };
-                            (Some(Expression::Macro(closure)), env)
+                            let (body, rand) = rand.decons().expect("malformed macro body");
+                            if matches!(rand, List::Cons(_, _)) {
+                                panic!("malformed macro body");
+                            }
+
+                            (
+                                Some(Expression::Macro(Closure {
+                                    params,
+                                    body: Box::new(body),
+                                    env: env.clone(),
+                                })),
+                                env,
+                            )
                         }
                         Builtin::If => {
                             let (cond, rand) = List::decons(rand).expect("malformed if cond");

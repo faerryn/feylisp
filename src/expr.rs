@@ -19,7 +19,7 @@ impl std::fmt::Display for Expression {
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(closure) => write!(f, "{}", closure),
+            Expression::Closure(closure) => write!(f, "(lambda {})", closure),
             Expression::Macro(closure) => write!(f, "(macro {})", closure),
         }
     }
@@ -193,6 +193,6 @@ pub struct Closure {
 
 impl std::fmt::Display for Closure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(lambda ({}) {}) [{}]", self.params, self.body, self.env)
+        write!(f, "({}) {}", self.params, self.body)
     }
 }
