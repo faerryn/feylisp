@@ -111,12 +111,13 @@ pub enum Builtin {
     NumBinop(NumBinop),
     ListMonop(ListMonop),
     Cons,
+    List,
     Let,
     Eval,
     Define,
 }
 
-pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
+pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 20] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
     ("macro", Builtin::Macro),
@@ -133,6 +134,7 @@ pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
     ("head", Builtin::ListMonop(ListMonop::Head)),
     ("tail", Builtin::ListMonop(ListMonop::Tail)),
     ("cons", Builtin::Cons),
+    ("list", Builtin::List),
     ("let", Builtin::Let),
     ("eval", Builtin::Eval),
     ("define", Builtin::Define),
@@ -141,7 +143,7 @@ pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
 impl std::fmt::Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (name, value) in BUILTIN_NAME_ALIST {
-            if value == self {
+            if value == *self {
                 write!(f, "{}", name)?;
                 return Ok(());
             }
