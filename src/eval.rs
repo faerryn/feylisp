@@ -101,27 +101,6 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                                 env,
                             )
                         }
-                        Builtin::Macro => {
-                            let (params, rand) =
-                                List::decons(rand).expect("malformed macro params");
-                            let params = match params {
-                                Expression::List(list) => list,
-                                _ => panic!("malformed macro params"),
-                            };
-                            let (body, rand) = rand.decons().expect("malformed macro body");
-                            if matches!(rand, List::Cons(_, _)) {
-                                panic!("malformed macro body");
-                            }
-
-                            (
-                                Some(Expression::Macro(Closure {
-                                    params,
-                                    body: Box::new(body),
-                                    env: env.clone(),
-                                })),
-                                env,
-                            )
-                        }
                         Builtin::If => {
                             let (cond, rand) = List::decons(rand).expect("malformed if cond");
                             let (cond, env) = eval(cond, env);
@@ -284,19 +263,9 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                         body,
                         env: closure_env,
                     }) => {
-                        let (new_env, env) = call_env(params, rand, closure_env, env, true);
+                        let (new_env, env) = call_env(params, rand, closure_env, env);
                         let (result, _) = eval(*body, new_env);
                         (result, env)
-                    }
-                    Expression::Macro(Closure {
-                        params,
-                        body,
-                        env: closure_env,
-                    }) => {
-                        let (new_env, env) = call_env(params, rand, closure_env, env, false);
-                        let (result, _) = eval(*body, new_env);
-                        let result = result.expect("malformed call macro");
-                        eval(result, env)
                     }
                     _ => panic!("malformed rator"),
                 }
@@ -344,7 +313,6 @@ fn call_env(
     args: List,
     new_env: Environment,
     caller_env: Environment,
-    eval_args: bool,
 ) -> (Environment, Environment) {
     match (params, args) {
         (List::Nil, List::Nil) => (new_env, caller_env),
@@ -355,17 +323,12 @@ fn call_env(
                 Expression::Symbol(symbol) => symbol,
                 _ => panic!("malformed call args"),
             };
-            let (arg, caller_env) = if eval_args {
-                let (arg, caller_env) = eval(arg, caller_env);
-                let arg = arg.expect("malformed call args");
-                (arg, caller_env)
-            } else {
-                (arg, caller_env)
-            };
+            let (arg, caller_env) = eval(arg, caller_env);
+            let arg = arg.expect("malformed call args");
 
             let new_env = Environment::cons(param, arg, new_env);
 
-            call_env(params, args, new_env, caller_env, eval_args)
+            call_env(params, args, new_env, caller_env)
         }
         _ => panic!("malformed call args"),
     }

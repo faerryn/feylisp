@@ -8,7 +8,6 @@ pub enum Expression {
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
-    Macro(Closure),
 }
 
 impl std::fmt::Display for Expression {
@@ -20,7 +19,6 @@ impl std::fmt::Display for Expression {
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
             Expression::Closure(closure) => write!(f, "(lambda {})", closure),
-            Expression::Macro(closure) => write!(f, "(macro {})", closure),
         }
     }
 }
@@ -105,7 +103,6 @@ impl std::fmt::Display for List {
 pub enum Builtin {
     Quote,
     Lambda,
-    Macro,
     If,
     TestMonop(TestMonop),
     NumBinop(NumBinop),
@@ -119,7 +116,6 @@ pub enum Builtin {
 pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
-    ("macro", Builtin::Macro),
     ("if", Builtin::If),
     ("number?", Builtin::TestMonop(TestMonop::Number)),
     ("list?", Builtin::TestMonop(TestMonop::List)),
