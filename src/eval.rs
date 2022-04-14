@@ -14,8 +14,8 @@ impl Environment {
         let mut result = Environment::Nil;
         for (name, value) in crate::expr::BUILTIN_NAME_ALIST {
             result = Environment::Cons(
-                name.to_owned(),
-                Box::new(Expression::Builtin(value)),
+                name.to_string(),
+                Box::new(Expression::Builtin(value.clone())),
                 Box::new(result),
             );
         }
@@ -234,10 +234,6 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
 
                             (Some(Expression::List(List::cons(head, tail))), env)
                         }
-                        Builtin::List => {
-                            let (result, env) = list_eval(rand, env);
-                            (Some(Expression::List(result)), env)
-                        }
                         Builtin::Let => {
                             let (varlist, rand) =
                                 List::decons(rand).expect("malformed let varlist");
@@ -340,18 +336,6 @@ fn let_env(
         let_env(tail, new_env, caller_env)
     } else {
         (new_env, caller_env)
-    }
-}
-
-fn list_eval(list: List, env: Environment) -> (List, Environment) {
-    if let List::Cons(head, tail) = list {
-        let (head, tail) = (*head, *tail);
-        let (head, env) = eval(head, env);
-        let head = head.expect("malformed list");
-        let (tail, env) = list_eval(tail, env);
-        (List::cons(head, tail), env)
-    } else {
-        (list, env)
     }
 }
 
