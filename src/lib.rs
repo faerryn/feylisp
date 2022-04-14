@@ -21,8 +21,8 @@ pub fn standard_env() -> Environment {
 (define car head)
 (define cdr tail)
 (define not (lambda (b) (if b #f #t)))
-(define and (macro (a b) (let ((a (eval a))) (cons 'quote (cons (if a (eval b) a) ())))))
-(define or (macro (a b) (let ((a (eval a))) (cons 'quote (cons (if a a (eval b)) ())))))
+(define and (lambda (a b) (if a b a)))
+(define or (lambda (a b) (if a a b)))
 
 (define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
 (define foldr (lambda (f v l) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
