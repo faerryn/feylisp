@@ -25,9 +25,9 @@ pub fn standard_env() -> Environment {
 (define or (lambda (a b) (if a a b)))
 
 (define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define foldr (lambda (f v l) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
-(define map (lambda (f l) (foldr (lambda (x acc) (cons (f x) acc)) () l)))
-(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (cons x acc) acc)) () l)))
+(define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
+(define map (lambda (f l) (foldr (lambda (x acc) (cons (f x) acc)) l ())))
+(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (cons x acc) acc)) l ())))
 ",
         env,
     );

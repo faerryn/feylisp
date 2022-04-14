@@ -1,4 +1,4 @@
-use crate::{expr::Expression, expr::Builtin, lex::Lexeme};
+use crate::{expr::Builtin, expr::Expression, lex::Lexeme};
 
 #[derive(Debug)]
 pub enum Error {
@@ -39,11 +39,15 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
             })),
             Lexeme::Quote => {
                 if let Some(elt) = parse_helper(iter)? {
-                    Ok(Some(Expression::List(vec![Expression::Builtin(Builtin::Quote), elt].into_iter().collect::<_>())))
+                    Ok(Some(Expression::List(
+                        vec![Expression::Builtin(Builtin::Quote), elt]
+                            .into_iter()
+                            .collect::<_>(),
+                    )))
                 } else {
                     Err(Error::UnclosedQuote)
                 }
-            },
+            }
         }
     } else {
         Ok(None)
