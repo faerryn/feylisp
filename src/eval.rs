@@ -82,7 +82,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                         }
                         Builtin::Lambda => {
                             let (params, rand) =
-                                List::decons(rand).expect("malformed lambda params");
+                                rand.decons().expect("malformed lambda params");
                             let params = match params {
                                 Expression::List(list) => list,
                                 _ => panic!("malformed lambda params"),
@@ -102,11 +102,11 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                             )
                         }
                         Builtin::If => {
-                            let (cond, rand) = List::decons(rand).expect("malformed if cond");
+                            let (cond, rand) = rand.decons().expect("malformed if cond");
                             let (cond, env) = eval(cond, env);
                             let cond = cond.expect("malformed if cond");
 
-                            let (when, rand) = List::decons(rand).expect("malformed if when");
+                            let (when, rand) = rand.decons().expect("malformed if when");
 
                             let (unless, rand) = rand.decons().expect("malformed if unless");
 
@@ -138,7 +138,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                             )
                         }
                         Builtin::NumBinop(op) => {
-                            let (rhs, rand) = List::decons(rand).expect("malformed numbinop rhs");
+                            let (rhs, rand) = rand.decons().expect("malformed numbinop rhs");
                             let (rhs, env) = eval(rhs, env);
                             let rhs = rhs.expect("malformed numbinop rhs");
                             let rhs = match rhs {
@@ -146,7 +146,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                                 _ => panic!("malformed numbinop rhs"),
                             };
 
-                            let (lhs, rand) = List::decons(rand).expect("malformed numbinop lhs");
+                            let (lhs, rand) = rand.decons().expect("malformed numbinop lhs");
                             let (lhs, env) = eval(lhs, env);
                             let lhs = lhs.expect("malformed numbinop lhs");
                             let lhs = match lhs {
@@ -186,7 +186,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                                 _ => panic!("malformed listmonop arg"),
                             };
 
-                            let (head, tail) = List::decons(arg).expect("malformed listmonop arg");
+                            let (head, tail) = arg.decons().expect("malformed listmonop arg");
                             (
                                 Some(match op {
                                     ListMonop::Head => head,
@@ -196,7 +196,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                             )
                         }
                         Builtin::Cons => {
-                            let (head, rand) = List::decons(rand).expect("malformed cons head");
+                            let (head, rand) = rand.decons().expect("malformed cons head");
                             let (head, env) = eval(head, env);
                             let head = head.expect("malformed cons head");
 
@@ -215,7 +215,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                         }
                         Builtin::Let => {
                             let (varlist, rand) =
-                                List::decons(rand).expect("malformed let varlist");
+                                rand.decons().expect("malformed let varlist");
                             let varlist = match varlist {
                                 Expression::List(list) => list,
                                 _ => panic!("malformed let varlist"),
@@ -241,7 +241,7 @@ pub fn eval(expr: Expression, env: Environment) -> (Option<Expression>, Environm
                             eval(arg, env)
                         }
                         Builtin::Define => {
-                            let (name, rand) = List::decons(rand).expect("malformed define name");
+                            let (name, rand) = rand.decons().expect("malformed define name");
                             let name = match name {
                                 Expression::Symbol(symbol) => symbol,
                                 _ => panic!("malformed define name"),
@@ -288,7 +288,7 @@ fn let_env(
             _ => panic!("malformed let varlist"),
         };
 
-        let (name, head) = List::decons(head).expect("malformed let varlist name");
+        let (name, head) = head.decons().expect("malformed let varlist name");
         let name = match name {
             Expression::Symbol(symbol) => symbol,
             _ => panic!("malformed let varlist"),
