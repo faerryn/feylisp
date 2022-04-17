@@ -22,16 +22,14 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
             Lexeme::Open => {
                 let mut list = vec![];
                 loop {
-                    match parse_helper::<_>(iter) {
+                    match parse_helper(iter) {
                         Ok(Some(elt)) => list.push(elt),
                         Err(Error::UnexpectedClose) => break,
                         Ok(None) => return Err(Error::UnclosedList),
                         Err(err) => return Err(err),
                     }
                 }
-                Ok(Some(Expression::List(Rc::new(
-                    list.into_iter().collect::<_>(),
-                ))))
+                Ok(Some(Expression::List(Rc::new(list.into_iter().collect()))))
             }
             Lexeme::Close => Err(Error::UnexpectedClose),
             Lexeme::Number(number) => Ok(Some(Expression::Number(number))),
@@ -45,7 +43,7 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
                     Ok(Some(Expression::List(Rc::new(
                         vec![Expression::Builtin(Builtin::Quote), elt]
                             .into_iter()
-                            .collect::<_>(),
+                            .collect(),
                     ))))
                 } else {
                     Err(Error::UnclosedQuote)

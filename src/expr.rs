@@ -30,17 +30,6 @@ pub enum List {
     Nil,
 }
 
-impl List {
-    #[must_use]
-    pub fn decons(&self) -> Option<(Rc<Expression>, Rc<List>)> {
-        if let List::Cons(head, tail) = self {
-            Some((Rc::clone(head), Rc::clone(tail)))
-        } else {
-            None
-        }
-    }
-}
-
 impl FromIterator<Expression> for List {
     fn from_iter<T: IntoIterator<Item = Expression>>(iter: T) -> Self {
         let mut iter = iter.into_iter();
@@ -53,30 +42,46 @@ impl FromIterator<Expression> for List {
     }
 }
 
-impl<'a> IntoIterator for &'a List {
-    type Item = &'a Expression;
+impl IntoIterator for List {
+    type Item = Rc<Expression>;
 
-    type IntoIter = ListVisitor<'a>;
+    type IntoIter = ListVisitor;
 
     fn into_iter(self) -> Self::IntoIter {
-        ListVisitor { list: self }
+        ListVisitor {
+            list: Rc::new(self),
+        }
     }
 }
 
-pub struct ListVisitor<'a> {
-    list: &'a List,
+impl IntoIterator for &List {
+    type Item = Rc<Expression>;
+
+    type IntoIter = ListVisitor;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ListVisitor {
+            list: Rc::new(match self {
+                List::Cons(head, tail) => List::Cons(Rc::clone(head), Rc::clone(tail)),
+                List::Nil => List::Nil,
+            }),
+        }
+    }
 }
 
-impl<'a> Iterator for ListVisitor<'a> {
-    type Item = &'a Expression;
+pub struct ListVisitor {
+    list: Rc<List>,
+}
+
+impl Iterator for ListVisitor {
+    type Item = Rc<Expression>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.list {
-            List::Cons(expr, tail) => {
-                self.list = tail;
-                Some(expr)
-            }
-            List::Nil => None,
+        if let List::Cons(expr, tail) = &*Rc::clone(&self.list) {
+            self.list = Rc::clone(tail);
+            Some(Rc::clone(expr))
+        } else {
+            None
         }
     }
 }

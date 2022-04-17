@@ -49,64 +49,65 @@ impl std::fmt::Display for Environment {
     }
 }
 
-#[must_use]
+#[derive(Debug)]
+pub enum Error {
+    ExpectedValue,
+    ExpectedCallable,
+    ExpectedList,
+    ExpectedPair,
+    ExpectedNumber,
+    ExpectedSymbol,
+    MismatchedOperand { received: usize, expected: usize },
+    FreeVariable(Rc<String>),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
 pub fn eval(
     expr: Rc<Expression>,
     env: Rc<Environment>,
-) -> (Option<Rc<Expression>>, Rc<Environment>) {
+) -> Result<(Option<Rc<Expression>>, Rc<Environment>), Error> {
     match &*expr {
-        Expression::Symbol(ident) => (
-            Some(
-                env.get(ident)
-                    .unwrap_or_else(|| panic!("free variable: {}", ident)),
-            ),
-            env,
-        ),
+        Expression::Symbol(ident) => {
+            if let Some(value) = env.get(ident) {
+                Ok((Some(value), env))
+            } else {
+                Err(Error::FreeVariable(Rc::clone(ident)))
+            }
+        }
         Expression::List(list) => match &**list {
             List::Cons(rator, rand) => {
-                let (rator, env) = eval(Rc::clone(rator), env);
-                let rator = match rator {
-                    Some(rator) => rator,
-                    None => panic!("malformed rator"),
-                };
+                let (rator, env) = eval(Rc::clone(rator), env)?;
+                let rator = rator.ok_or(Error::ExpectedValue)?;
 
                 match &*rator {
                     Expression::Builtin(builtin) => match builtin {
                         Builtin::Quote => {
-                            let (arg, rand) = rand.decons().expect("malformed quote arg");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed quote arg");
-                            }
-                            (Some(arg), env)
+                            let [arg] = unpack_args(Rc::clone(rand))?;
+                            Ok((Some(arg), env))
                         }
                         Builtin::Lambda => {
-                            let (params, rand) = rand.decons().expect("malformed lambda params");
-                            let (body, rand) = rand.decons().expect("malformed lambda body");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed lambda body");
-                            }
-
-                            (
+                            let [params, body] = unpack_args(Rc::clone(rand))?;
+                            Ok((
                                 Some(Rc::new(Expression::Closure(Closure {
                                     params,
                                     body,
                                     env: Rc::clone(&env),
                                 }))),
                                 env,
-                            )
+                            ))
                         }
                         Builtin::If => {
-                            let (cond, rand) = rand.decons().expect("malformed if cond");
-                            let (cond, env) = eval(cond, env);
-                            let cond = cond.expect("malformed if cond");
+                            let [cond, when, unless] = unpack_args(Rc::clone(rand))?;
 
-                            let (when, rand) = rand.decons().expect("malformed if when");
-
-                            let (unless, rand) = rand.decons().expect("malformed if unless");
-
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed if unless");
-                            }
+                            let (cond, env) = eval(cond, env)?;
+                            let cond = cond.ok_or(Error::ExpectedValue)?;
 
                             if matches!(*cond, Expression::Bool(false)) {
                                 eval(unless, env)
@@ -115,14 +116,11 @@ pub fn eval(
                             }
                         }
                         Builtin::TestMonop(op) => {
-                            let (arg, rand) = rand.decons().expect("malformed testmonop arg");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed testmonop arg");
-                            }
+                            let [arg] = unpack_args(Rc::clone(rand))?;
 
-                            let (arg, env) = eval(arg, env);
-                            let arg = arg.expect("malformed testmonop arg");
-                            (
+                            let (arg, env) = eval(arg, env)?;
+                            let arg = arg.ok_or(Error::ExpectedValue)?;
+                            Ok((
                                 Some(Rc::new(Expression::Bool(match op {
                                     TestMonop::Number => matches!(*arg, Expression::Number(_)),
                                     TestMonop::List => matches!(*arg, Expression::List(_)),
@@ -135,29 +133,20 @@ pub fn eval(
                                     }
                                 }))),
                                 env,
-                            )
+                            ))
                         }
                         Builtin::NumBinop(op) => {
-                            let (rhs, rand) = rand.decons().expect("malformed numbinop rhs");
-                            let (rhs, env) = eval(rhs, env);
-                            let rhs = rhs.expect("malformed numbinop rhs");
-                            let rhs = match *rhs {
-                                Expression::Number(number) => number,
-                                _ => panic!("malformed numbinop rhs"),
-                            };
+                            let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
-                            let (lhs, rand) = rand.decons().expect("malformed numbinop lhs");
-                            let (lhs, env) = eval(lhs, env);
-                            let lhs = lhs.expect("malformed numbinop lhs");
-                            let lhs = match *lhs {
-                                Expression::Number(number) => number,
-                                _ => panic!("malformed numbinop lhs"),
-                            };
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed numbinop lhs")
-                            }
+                            let (rhs, env) = eval(rhs, env)?;
+                            let rhs = rhs.ok_or(Error::ExpectedValue)?;
+                            let rhs = to_number(rhs)?;
 
-                            (
+                            let (lhs, env) = eval(lhs, env)?;
+                            let lhs = lhs.ok_or(Error::ExpectedValue)?;
+                            let lhs = to_number(lhs)?;
+
+                            Ok((
                                 Some(Rc::new(match op {
                                     NumBinop::ArBinop(op) => Expression::Number(match op {
                                         ArBinop::Add => rhs + lhs,
@@ -171,96 +160,71 @@ pub fn eval(
                                     }),
                                 })),
                                 env,
-                            )
+                            ))
                         }
                         Builtin::ListMonop(op) => {
-                            let (arg, rand) = rand.decons().expect("malformed listmonop arg");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed listmonop arg");
+                            let [arg] = unpack_args(Rc::clone(rand))?;
+
+                            let (arg, env) = eval(arg, env)?;
+                            let arg = arg.ok_or(Error::ExpectedValue)?;
+                            let arg = to_list(arg)?;
+
+                            if let List::Cons(head, tail) = &*arg {
+                                Ok((
+                                    Some(match op {
+                                        ListMonop::Head => Rc::clone(head),
+                                        ListMonop::Tail => {
+                                            Rc::new(Expression::List(Rc::clone(tail)))
+                                        }
+                                    }),
+                                    env,
+                                ))
+                            } else {
+                                Err(Error::ExpectedPair)
                             }
-
-                            let (arg, env) = eval(arg, env);
-                            let arg = arg.expect("malformed listmonop arg");
-                            let arg = match &*arg {
-                                Expression::List(list) => list,
-                                _ => panic!("malformed listmonop arg"),
-                            };
-
-                            let (head, tail) = arg.decons().expect("malformed listmonop arg");
-                            (
-                                Some(match op {
-                                    ListMonop::Head => head,
-                                    ListMonop::Tail => Rc::new(Expression::List(tail)),
-                                }),
-                                env,
-                            )
                         }
                         Builtin::Cons => {
-                            let (head, rand) = rand.decons().expect("malformed cons head");
-                            let (head, env) = eval(head, env);
-                            let head = head.expect("malformed cons head");
+                            let [head, tail] = unpack_args(Rc::clone(rand))?;
 
-                            let (tail, rand) = rand.decons().expect("malformed cons tail");
-                            let (tail, env) = eval(tail, env);
-                            let tail = tail.expect("malformed cons tail");
-                            let tail = match &*tail {
-                                Expression::List(list) => list,
-                                _ => panic!("malformed cons tail"),
-                            };
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed cons tail");
-                            }
+                            let (head, env) = eval(head, env)?;
+                            let head = head.ok_or(Error::ExpectedValue)?;
 
-                            (
-                                Some(Rc::new(Expression::List(Rc::new(List::Cons(
-                                    head,
-                                    Rc::clone(tail),
-                                ))))),
+                            let (tail, env) = eval(tail, env)?;
+                            let tail = tail.ok_or(Error::ExpectedValue)?;
+                            let tail = to_list(tail)?;
+
+                            Ok((
+                                Some(Rc::new(Expression::List(Rc::new(List::Cons(head, tail))))),
                                 env,
-                            )
+                            ))
                         }
                         Builtin::Let => {
-                            let (varlist, rand) = rand.decons().expect("malformed let varlist");
-                            let varlist = match &*varlist {
-                                Expression::List(list) => list,
-                                _ => panic!("malformed let varlist"),
-                            };
+                            let [varlist, body] = unpack_args(Rc::clone(rand))?;
 
-                            let (body, rand) = rand.decons().expect("malformed let body");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed let body");
-                            }
+                            let varlist = to_list(varlist)?;
 
-                            let (new_env, env) = let_env(Rc::clone(varlist), Rc::clone(&env), env);
-                            let (result, _) = eval(body, new_env);
-                            (result, env)
+                            let (new_env, env) = create_let_env(varlist, Rc::clone(&env), env)?;
+                            let (result, _) = eval(body, new_env)?;
+                            Ok((result, env))
                         }
                         Builtin::Eval => {
-                            let (arg, rand) = rand.decons().expect("malformed eval arg");
-                            let (arg, env) = eval(arg, env);
-                            let arg = arg.expect("malformed eval arg");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed eval arg");
-                            }
+                            let [arg] = unpack_args(Rc::clone(rand))?;
+
+                            let (arg, env) = eval(arg, env)?;
+                            let arg = arg.ok_or(Error::ExpectedValue)?;
 
                             eval(arg, env)
                         }
                         Builtin::Define => {
-                            let (name, rand) = rand.decons().expect("malformed define name");
-                            let name = match &*name {
-                                Expression::Symbol(symbol) => symbol,
-                                _ => panic!("malformed define name"),
-                            };
+                            let [name, value] = unpack_args(Rc::clone(rand))?;
 
-                            let (value, rand) = rand.decons().expect("malformed define value");
-                            let (value, env) = eval(value, env);
-                            let value = value.expect("malformed define value");
-                            if matches!(*rand, List::Cons(_, _)) {
-                                panic!("malformed define value");
-                            }
+                            let name = to_symbol(name)?;
 
-                            let new_env = Environment::Cons(Rc::clone(name), value, env);
-                            (None, Rc::new(new_env))
+                            let (value, env) = eval(value, env)?;
+                            let value = value.ok_or(Error::ExpectedValue)?;
+
+                            let new_env = Environment::Cons(name, value, env);
+                            Ok((None, Rc::new(new_env)))
                         }
                     },
                     Expression::Closure(Closure {
@@ -268,85 +232,117 @@ pub fn eval(
                         body,
                         env: closure_env,
                     }) => {
-                        let params = if let Expression::List(list) = &**params {
-                            list
-                        } else {
-                            panic!("malformed parameters")
-                        };
-                        let (new_env, env) = call_env(
-                            Rc::clone(params),
+                        let params = to_list(Rc::clone(params))?;
+                        let (closure_env, new_env) = create_closure_env(
+                            params,
                             Rc::clone(rand),
+                            0,
                             Rc::clone(closure_env),
                             env,
-                        );
-                        let (result, _) = eval(Rc::clone(body), new_env);
-                        (result, env)
+                        )?;
+                        let (result, _) = eval(Rc::clone(body), closure_env)?;
+                        Ok((result, new_env))
                     }
-                    _ => panic!("malformed rator"),
+                    _ => Err(Error::ExpectedCallable),
                 }
             }
-            List::Nil => (Some(expr), env),
+            List::Nil => Ok((Some(expr), env)),
         },
-        _ => (Some(expr), env),
+        _ => Ok((Some(expr), env)),
     }
 }
 
-fn let_env(
+fn create_let_env(
     varlist: Rc<List>,
-    new_env: Rc<Environment>,
+    env: Rc<Environment>,
     caller_env: Rc<Environment>,
-) -> (Rc<Environment>, Rc<Environment>) {
+) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
     if let List::Cons(head, tail) = &*varlist {
-        let head = match &**head {
-            Expression::List(list) => list,
-            _ => panic!("malformed let varlist"),
-        };
+        let head = to_list(Rc::clone(head))?;
 
-        let (name, head) = head.decons().expect("malformed let varlist name");
-        let name = match &*name {
-            Expression::Symbol(symbol) => symbol,
-            _ => panic!("malformed let varlist"),
-        };
+        let [name, value] = unpack_args(head)?;
 
-        let (value, head) = head.decons().expect("malformed let varlist value");
-        let (value, caller_env) = eval(value, caller_env);
-        let value = value.expect("malformed let varlist value");
-        if matches!(*head, List::Cons(_, _)) {
-            panic!("malformed let varlist value");
-        }
+        let name = to_symbol(name)?;
 
-        let new_env = Environment::Cons(Rc::clone(name), value, new_env);
-        let_env(Rc::clone(tail), Rc::new(new_env), caller_env)
+        let (value, caller_env) = eval(value, caller_env)?;
+        let value = value.ok_or(Error::ExpectedValue)?;
+
+        let new_env = Environment::Cons(name, value, env);
+        create_let_env(Rc::clone(tail), Rc::new(new_env), caller_env)
     } else {
-        (new_env, caller_env)
+        Ok((env, caller_env))
     }
 }
 
-fn call_env(
+fn create_closure_env(
     params: Rc<List>,
     args: Rc<List>,
+    matched: usize,
     new_env: Rc<Environment>,
     caller_env: Rc<Environment>,
-) -> (Rc<Environment>, Rc<Environment>) {
+) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
     match (&*params, &*args) {
-        (List::Nil, List::Nil) => (new_env, caller_env),
+        (List::Nil, List::Nil) => Ok((new_env, caller_env)),
         (List::Cons(param, params), List::Cons(arg, args)) => {
-            let param = match &**param {
-                Expression::Symbol(symbol) => symbol,
-                _ => panic!("malformed call args"),
-            };
-            let (arg, caller_env) = eval(Rc::clone(arg), caller_env);
-            let arg = arg.expect("malformed call args");
+            let param = to_symbol(Rc::clone(param))?;
+            let (arg, caller_env) = eval(Rc::clone(arg), caller_env)?;
+            let arg = arg.ok_or(Error::ExpectedValue)?;
 
-            let new_env = Environment::Cons(Rc::clone(param), arg, new_env);
+            let new_env = Environment::Cons(param, arg, new_env);
 
-            call_env(
+            create_closure_env(
                 Rc::clone(params),
                 Rc::clone(args),
+                matched + 1,
                 Rc::new(new_env),
                 caller_env,
             )
         }
-        _ => panic!("malformed call args"),
+        _ => {
+            let mut expected = matched;
+            let params = (&*params).into_iter();
+            for _ in params {
+                expected += 1;
+            }
+
+            let mut received = matched;
+            let args = (&*args).into_iter();
+            for _ in args {
+                received += 1;
+            }
+
+            Err(Error::MismatchedOperand { received, expected })
+        }
+    }
+}
+
+fn unpack_args<const S: usize>(list: Rc<List>) -> Result<[Rc<Expression>; S], Error> {
+    let result: Vec<_> = (&*list).into_iter().collect();
+    let result_len = result.len();
+
+    result.try_into().map_err(|_| Error::MismatchedOperand {
+        received: result_len,
+        expected: S,
+    })
+}
+
+fn to_number(expr: Rc<Expression>) -> Result<i32, Error> {
+    match &*expr {
+        Expression::Number(num) => Ok(*num),
+        _ => Err(Error::ExpectedNumber),
+    }
+}
+
+fn to_list(expr: Rc<Expression>) -> Result<Rc<List>, Error> {
+    match &*expr {
+        Expression::List(list) => Ok(Rc::clone(list)),
+        _ => Err(Error::ExpectedList),
+    }
+}
+
+fn to_symbol(expr: Rc<Expression>) -> Result<Rc<String>, Error> {
+    match &*expr {
+        Expression::Symbol(symbol) => Ok(Rc::clone(symbol)),
+        _ => Err(Error::ExpectedSymbol),
     }
 }

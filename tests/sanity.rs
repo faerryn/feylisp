@@ -12,7 +12,7 @@ mod tests {
             standard_env(),
         )
         .unwrap();
-        assert!(exprs.len() == 1);
+        assert_eq!(exprs.len(), 1);
         assert!(matches!(*exprs[0], Expression::Number(120)));
     }
 
@@ -26,7 +26,7 @@ mod tests {
             standard_env(),
         )
         .unwrap();
-        assert!(exprs.len() == 1);
+        assert_eq!(exprs.len(), 1);
         assert!(matches!(*exprs[0], Expression::Number(55)));
     }
 
@@ -42,15 +42,11 @@ mod tests {
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::List(_)));
         if let Expression::List(list) = &*exprs[0] {
-            let list: Vec<_> = list.into_iter().collect::<_>();
-            assert!(matches!(
-                list.as_slice(),
-                [
-                    Expression::Number(2),
-                    Expression::Number(3),
-                    Expression::Number(4),
-                ]
-            ));
+            let list: Vec<_> = (&**list).into_iter().collect::<_>();
+            assert_eq!(list.len(), 3);
+            assert!(matches!(*list[0], Expression::Number(2)));
+            assert!(matches!(*list[1], Expression::Number(3)));
+            assert!(matches!(*list[2], Expression::Number(4)));
         } else {
             unreachable!();
         }

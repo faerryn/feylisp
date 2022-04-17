@@ -42,16 +42,31 @@ pub fn standard_env() -> Rc<Environment> {
     env
 }
 
+#[derive(Debug)]
+pub enum Error {
+    IO(std::io::Error),
+    Parse(parse::Error),
+    Eval(eval::Error),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
 pub fn eval_src(
     src: &str,
     mut env: Rc<Environment>,
-) -> Result<(Vec<Rc<Expression>>, Rc<Environment>), parse::Error> {
-    let exprs = parse(lex(src))?;
+) -> Result<(Vec<Rc<Expression>>, Rc<Environment>), Error> {
+    let exprs = parse(lex(src)).map_err(Error::Parse)?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
     for expr in exprs {
-        let (expr, new_env) = eval(Rc::new(expr), env);
+        let (expr, new_env) = eval(Rc::new(expr), env).map_err(Error::Eval)?;
         if let Some(expr) = expr {
             result.push(expr);
         }
@@ -77,10 +92,16 @@ pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error>
         match parse(lex(&src)) {
             Ok(exprs) => {
                 for expr in exprs {
-                    let (expr, new_env) = eval(Rc::new(expr), env);
-                    env = new_env;
-                    if let Some(expr) = expr {
-                        println!("{}", expr);
+                    match eval(Rc::new(expr), Rc::clone(&env)) {
+                        Ok((expr, new_env)) => {
+                            env = new_env;
+                            if let Some(expr) = expr {
+                                println!("{}", expr);
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("{}", err);
+                        }
                     }
                 }
 
