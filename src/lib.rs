@@ -109,16 +109,10 @@ pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error>
                 print!("> ");
                 stdout.flush()?;
             }
-            Err(parse::Error::UnclosedList) => {}
+            Err(parse::Error::UnclosedList | parse::Error::UnclosedQuote) => {}
             Err(parse::Error::UnexpectedClose) => {
                 src.clear();
                 println!("unexpected ')'");
-                print!("> ");
-                stdout.flush()?;
-            }
-            Err(parse::Error::UnclosedQuote) => {
-                src.clear();
-                println!("expected something after quote '");
                 print!("> ");
                 stdout.flush()?;
             }
