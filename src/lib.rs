@@ -37,14 +37,16 @@ pub fn standard_env() -> Rc<Environment> {
 (define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (cons x acc) acc)) l ())))
 ",
         env,
-    );
+    ).unwrap();
 
     env
 }
 
-#[must_use]
-pub fn eval_src(src: &str, mut env: Rc<Environment>) -> (Vec<Rc<Expression>>, Rc<Environment>) {
-    let exprs = parse(lex(src)).expect("parse fail");
+pub fn eval_src(
+    src: &str,
+    mut env: Rc<Environment>,
+) -> Result<(Vec<Rc<Expression>>, Rc<Environment>), parse::Error> {
+    let exprs = parse(lex(src))?;
     let mut result = vec![];
     result.reserve(exprs.len());
 
@@ -56,11 +58,10 @@ pub fn eval_src(src: &str, mut env: Rc<Environment>) -> (Vec<Rc<Expression>>, Rc
         env = new_env;
     }
 
-    (result, env)
+    Ok((result, env))
 }
 
-#[must_use]
-pub fn repl(mut env: Rc<Environment>) -> Rc<Environment> {
+pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
@@ -68,9 +69,9 @@ pub fn repl(mut env: Rc<Environment>) -> Rc<Environment> {
     let mut line = String::new();
 
     print!("> ");
-    stdout.flush().expect("broken stdout");
+    stdout.flush()?;
 
-    while stdin.read_line(&mut line).expect("broken stdin") > 0 {
+    while stdin.read_line(&mut line)? > 0 {
         src.push_str(&line);
         line.clear();
         match parse(lex(&src)) {
@@ -85,23 +86,23 @@ pub fn repl(mut env: Rc<Environment>) -> Rc<Environment> {
 
                 src.clear();
                 print!("> ");
-                stdout.flush().expect("broken stdout");
+                stdout.flush()?;
             }
             Err(parse::Error::UnclosedList) => {}
             Err(parse::Error::UnexpectedClose) => {
                 src.clear();
                 println!("unexpected ')'");
                 print!("> ");
-                stdout.flush().expect("broken stdout");
+                stdout.flush()?;
             }
             Err(parse::Error::UnclosedQuote) => {
                 src.clear();
                 println!("expected something after quote '");
                 print!("> ");
-                stdout.flush().expect("broken stdout");
+                stdout.flush()?;
             }
         }
     }
 
-    env
+    Ok(env)
 }

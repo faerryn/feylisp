@@ -10,7 +10,8 @@ mod tests {
 (fact 5)))
 ",
             standard_env(),
-        );
+        )
+        .unwrap();
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::Number(120)));
     }
@@ -23,7 +24,8 @@ mod tests {
 (fib 10)
 ",
             standard_env(),
-        );
+        )
+        .unwrap();
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::Number(55)));
     }
@@ -35,7 +37,8 @@ mod tests {
 (map (lambda (x) (+ 1 x)) '(1 2 3))
 ",
             standard_env(),
-        );
+        )
+        .unwrap();
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::List(_)));
         if let Expression::List(list) = &*exprs[0] {

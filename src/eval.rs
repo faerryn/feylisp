@@ -58,7 +58,7 @@ pub fn eval(
         Expression::Symbol(ident) => (
             Some(
                 env.get(ident)
-                    .unwrap_or_else(|| panic!("free variable `{}'", ident)),
+                    .unwrap_or_else(|| panic!("free variable: {}", ident)),
             ),
             env,
         ),
