@@ -184,13 +184,13 @@ pub enum ListMonop {
 
 #[derive(Debug)]
 pub struct Closure {
-    pub params: Rc<Expression>,
+    pub params: Rc<List>,
     pub body: Rc<Expression>,
     pub env: Rc<Environment>,
 }
 
 impl std::fmt::Display for Closure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.params, self.body)
+        write!(f, "({}) {}", self.params, self.body)
     }
 }

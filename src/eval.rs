@@ -96,6 +96,7 @@ pub fn eval(
 
                         Builtin::Lambda => {
                             let [params, body] = unpack_args(Rc::clone(rand))?;
+                            let params = to_list(params)?;
                             Ok((
                                 Some(Rc::new(Expression::Closure(Closure {
                                     params,
@@ -236,9 +237,8 @@ pub fn eval(
                         body,
                         env: closure_env,
                     }) => {
-                        let params = to_list(Rc::clone(params))?;
                         let (closure_env, env) = create_closure_env(
-                            params,
+                            Rc::clone(params),
                             Rc::clone(rand),
                             0,
                             Rc::clone(closure_env),
