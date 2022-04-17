@@ -186,6 +186,6 @@ pub struct Closure {
 
 impl std::fmt::Display for Closure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}) {}", self.params, self.body)
+        write!(f, "{} {}", self.params, self.body)
     }
 }
