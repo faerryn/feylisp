@@ -22,9 +22,14 @@ pub fn standard_env() -> Rc<Environment> {
         "
 (define car head)
 (define cdr tail)
+
 (define not (lambda (b) (if b #f #t)))
 (define and (lambda (a b) (if a b a)))
 (define or (lambda (a b) (if a a b)))
+
+(define <= (lambda (a b) (or (= a b) (< a b))))
+(define > (lambda (a b) (not (<= a b))))
+(define >= (lambda (a b) (not (< a b))))
 
 (define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
 (define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
