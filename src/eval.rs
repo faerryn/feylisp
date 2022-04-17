@@ -1,6 +1,4 @@
-use crate::expr::{
-    ArBinop, Builtin, Closure, Expression, List, ListMonop, NumBinop, OrdBinop, TestMonop,
-};
+use crate::expr::{ArBinop, Builtin, Closure, Expression, List, ListMonop, NumBinop};
 
 use std::rc::Rc;
 
@@ -57,6 +55,7 @@ pub enum Error {
     ExpectedPair,
     ExpectedNumber,
     ExpectedSymbol,
+    ExpectedLikeType,
     MismatchedOperand { received: usize, expected: usize },
     FreeVariable(Rc<String>),
 }
@@ -120,23 +119,15 @@ pub fn eval(
                             }
                         }
 
-                        Builtin::TestMonop(op) => {
+                        Builtin::TestNil => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
 
                             let (arg, env) = eval(arg, env)?;
                             let arg = arg.ok_or(Error::ExpectedValue)?;
+                            let arg = to_list(arg)?;
+
                             Ok((
-                                Some(Rc::new(Expression::Bool(match op {
-                                    TestMonop::Number => matches!(*arg, Expression::Number(_)),
-                                    TestMonop::List => matches!(*arg, Expression::List(_)),
-                                    TestMonop::Nil => {
-                                        if let Expression::List(list) = &*arg {
-                                            matches!(**list, List::Nil)
-                                        } else {
-                                            false
-                                        }
-                                    }
-                                }))),
+                                Some(Rc::new(Expression::Bool(matches!(*arg, List::Nil)))),
                                 env,
                             ))
                         }
@@ -160,10 +151,7 @@ pub fn eval(
                                         ArBinop::Mul => rhs * lhs,
                                         ArBinop::Div => rhs / lhs,
                                     }),
-                                    NumBinop::OrdBinop(op) => Expression::Bool(match op {
-                                        OrdBinop::Eql => rhs == lhs,
-                                        OrdBinop::Lt => rhs < lhs,
-                                    }),
+                                    NumBinop::Lt => Expression::Bool(rhs < lhs),
                                 })),
                                 env,
                             ))
@@ -229,6 +217,47 @@ pub fn eval(
                             let value = value.ok_or(Error::ExpectedValue)?;
                             let new_env = Environment::Pair(name, value, env);
                             Ok((None, Rc::new(new_env)))
+                        }
+                        Builtin::Type => {
+                            let [arg] = unpack_args(Rc::clone(rand))?;
+                            let (arg, env) = eval(arg, env)?;
+                            let arg = arg.ok_or(Error::ExpectedValue)?;
+
+                            Ok((
+                                Some(Rc::new(Expression::Symbol(Rc::new(String::from(
+                                    match &*arg {
+                                        Expression::Number(_) => "number",
+                                        Expression::Symbol(_) => "symbol",
+                                        Expression::List(_) => "list",
+                                        Expression::Bool(_) => "bool",
+                                        Expression::Builtin(_) => "builting",
+                                        Expression::Closure(_) => "closure",
+                                    },
+                                ))))),
+                                env,
+                            ))
+                        }
+                        Builtin::Eql => {
+                            let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
+
+                            let (rhs, env) = eval(rhs, env)?;
+                            let rhs = rhs.ok_or(Error::ExpectedValue)?;
+
+                            let (lhs, env) = eval(lhs, env)?;
+                            let lhs = lhs.ok_or(Error::ExpectedValue)?;
+
+                            match (&*rhs, &*lhs) {
+                                (Expression::Number(lhs), Expression::Number(rhs)) => {
+                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                }
+                                (Expression::Symbol(lhs), Expression::Symbol(rhs)) => {
+                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                }
+                                (Expression::Bool(lhs), Expression::Bool(rhs)) => {
+                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                }
+                                _ => Err(Error::ExpectedLikeType),
+                            }
                         }
                     },
 

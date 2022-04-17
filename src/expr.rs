@@ -106,7 +106,9 @@ pub enum Builtin {
     Quote,
     Lambda,
     If,
-    TestMonop(TestMonop),
+    TestNil,
+    Type,
+    Eql,
     NumBinop(NumBinop),
     ListMonop(ListMonop),
     Pair,
@@ -119,15 +121,15 @@ pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
     ("if", Builtin::If),
-    ("number?", Builtin::TestMonop(TestMonop::Number)),
-    ("list?", Builtin::TestMonop(TestMonop::List)),
-    ("nil?", Builtin::TestMonop(TestMonop::Nil)),
+    ("nil?", Builtin::TestNil),
+    ("type", Builtin::Type),
+    ("eql", Builtin::Eql),
     ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
     ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
     ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
     ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-    ("=", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Eql))),
-    ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
+    ("=", Builtin::Eql),
+    ("<", Builtin::NumBinop(NumBinop::Lt)),
     ("head", Builtin::ListMonop(ListMonop::Head)),
     ("tail", Builtin::ListMonop(ListMonop::Tail)),
     ("pair", Builtin::Pair),
@@ -150,16 +152,9 @@ impl std::fmt::Display for Builtin {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum TestMonop {
-    Number,
-    List,
-    Nil,
-}
-
-#[derive(Debug, PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
-    OrdBinop(OrdBinop),
+    Lt,
 }
 
 #[derive(Debug, PartialEq)]
@@ -168,12 +163,6 @@ pub enum ArBinop {
     Sub,
     Mul,
     Div,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum OrdBinop {
-    Eql,
-    Lt,
 }
 
 #[derive(Debug, PartialEq)]
