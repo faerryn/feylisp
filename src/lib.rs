@@ -10,11 +10,13 @@ use crate::{
     parse::parse,
 };
 
+use std::rc::Rc;
+
 use std::io::prelude::*;
 
 #[must_use]
-pub fn standard_env() -> Environment {
-    let env = Environment::core_env();
+pub fn standard_env() -> Rc<Environment> {
+    let env = Rc::new(Environment::core_env());
 
     let (_, env) = eval_src(
         "
@@ -36,13 +38,13 @@ pub fn standard_env() -> Environment {
 }
 
 #[must_use]
-pub fn eval_src(src: &str, mut env: Environment) -> (Vec<Expression>, Environment) {
+pub fn eval_src(src: &str, mut env: Rc<Environment>) -> (Vec<Rc<Expression>>, Rc<Environment>) {
     let exprs = parse(lex(src)).expect("parse fail");
     let mut result = vec![];
     result.reserve(exprs.len());
 
     for expr in exprs {
-        let (expr, new_env) = eval(expr, env);
+        let (expr, new_env) = eval(Rc::new(expr), env);
         if let Some(expr) = expr {
             result.push(expr);
         }
@@ -53,7 +55,7 @@ pub fn eval_src(src: &str, mut env: Environment) -> (Vec<Expression>, Environmen
 }
 
 #[must_use]
-pub fn repl(mut env: Environment) -> Environment {
+pub fn repl(mut env: Rc<Environment>) -> Rc<Environment> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
@@ -69,7 +71,7 @@ pub fn repl(mut env: Environment) -> Environment {
         match parse(lex(&src)) {
             Ok(exprs) => {
                 for expr in exprs {
-                    let (expr, new_env) = eval(expr, env);
+                    let (expr, new_env) = eval(Rc::new(expr), env);
                     env = new_env;
                     if let Some(expr) = expr {
                         println!("{}", expr);

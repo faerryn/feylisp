@@ -1,10 +1,11 @@
 use crate::eval::Environment;
+use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Expression {
     Number(i32),
-    Symbol(String),
-    List(List),
+    Symbol(Rc<String>),
+    List(Rc<List>),
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
@@ -23,21 +24,17 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum List {
-    Cons(Box<Expression>, Box<List>),
+    Cons(Rc<Expression>, Rc<List>),
     Nil,
 }
 
 impl List {
     #[must_use]
-    pub fn cons(expr: Expression, list: List) -> List {
-        List::Cons(Box::new(expr), Box::new(list))
-    }
-    #[must_use]
-    pub fn decons(self) -> Option<(Expression, List)> {
+    pub fn decons(&self) -> Option<(Rc<Expression>, Rc<List>)> {
         if let List::Cons(head, tail) = self {
-            Some((*head, *tail))
+            Some((Rc::clone(head), Rc::clone(tail)))
         } else {
             None
         }
@@ -49,7 +46,7 @@ impl FromIterator<Expression> for List {
         let mut iter = iter.into_iter();
 
         if let Some(expr) = iter.next() {
-            List::Cons(Box::new(expr), Box::new(iter.collect()))
+            List::Cons(Rc::new(expr), Rc::new(iter.collect()))
         } else {
             List::Nil
         }
@@ -99,7 +96,7 @@ impl std::fmt::Display for List {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Builtin {
     Quote,
     Lambda,
@@ -113,7 +110,7 @@ pub enum Builtin {
     Define,
 }
 
-pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
+pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
     ("quote", Builtin::Quote),
     ("lambda", Builtin::Lambda),
     ("if", Builtin::If),
@@ -137,7 +134,7 @@ pub const BUILTIN_NAME_ALIST: &[(&str, Builtin)] = &[
 impl std::fmt::Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (name, value) in BUILTIN_NAME_ALIST {
-            if value == self {
+            if value == *self {
                 write!(f, "{}", name)?;
                 return Ok(());
             }
@@ -147,20 +144,20 @@ impl std::fmt::Display for Builtin {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum TestMonop {
     Number,
     List,
     Nil,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     OrdBinop(OrdBinop),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -168,23 +165,23 @@ pub enum ArBinop {
     Div,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum OrdBinop {
     Eql,
     Lt,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Closure {
-    pub params: List,
-    pub body: Box<Expression>,
-    pub env: Environment,
+    pub params: Rc<Expression>,
+    pub body: Rc<Expression>,
+    pub env: Rc<Environment>,
 }
 
 impl std::fmt::Display for Closure {

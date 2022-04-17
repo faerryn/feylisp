@@ -11,7 +11,8 @@ mod tests {
 ",
             standard_env(),
         );
-        assert!(matches!(exprs.as_slice(), [Expression::Number(120)]));
+        assert!(exprs.len() == 1);
+        assert!(matches!(*exprs[0], Expression::Number(120)));
     }
 
     #[test]
@@ -23,7 +24,8 @@ mod tests {
 ",
             standard_env(),
         );
-        assert!(matches!(exprs.as_slice(), [Expression::Number(55)]));
+        assert!(exprs.len() == 1);
+        assert!(matches!(*exprs[0], Expression::Number(55)));
     }
 
     #[test]
@@ -34,20 +36,20 @@ mod tests {
 ",
             standard_env(),
         );
-        assert!(matches!(exprs.as_slice(), [Expression::List(_)]));
-        match exprs.as_slice() {
-            [Expression::List(list)] => {
-                let list: Vec<_> = list.into_iter().collect::<_>();
-                assert!(matches!(
-                    list.as_slice(),
-                    [
-                        Expression::Number(2),
-                        Expression::Number(3),
-                        Expression::Number(4),
-                    ]
-                ))
-            }
-            _ => assert!(false),
+        assert!(exprs.len() == 1);
+        assert!(matches!(*exprs[0], Expression::List(_)));
+        if let Expression::List(list) = &*exprs[0] {
+            let list: Vec<_> = list.into_iter().collect::<_>();
+            assert!(matches!(
+                list.as_slice(),
+                [
+                    Expression::Number(2),
+                    Expression::Number(3),
+                    Expression::Number(4),
+                ]
+            ));
+        } else {
+            unreachable!();
         }
     }
 }
