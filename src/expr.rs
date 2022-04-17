@@ -26,7 +26,7 @@ impl std::fmt::Display for Expression {
 
 #[derive(Debug)]
 pub enum List {
-    Cons(Rc<Expression>, Rc<List>),
+    Pair(Rc<Expression>, Rc<List>),
     Nil,
 }
 
@@ -35,7 +35,7 @@ impl FromIterator<Expression> for List {
         let mut iter = iter.into_iter();
 
         if let Some(expr) = iter.next() {
-            List::Cons(Rc::new(expr), Rc::new(iter.collect()))
+            List::Pair(Rc::new(expr), Rc::new(iter.collect()))
         } else {
             List::Nil
         }
@@ -62,7 +62,7 @@ impl IntoIterator for &List {
     fn into_iter(self) -> Self::IntoIter {
         ListVisitor {
             list: Rc::new(match self {
-                List::Cons(head, tail) => List::Cons(Rc::clone(head), Rc::clone(tail)),
+                List::Pair(head, tail) => List::Pair(Rc::clone(head), Rc::clone(tail)),
                 List::Nil => List::Nil,
             }),
         }
@@ -77,7 +77,7 @@ impl Iterator for ListVisitor {
     type Item = Rc<Expression>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let List::Cons(expr, tail) = &*Rc::clone(&self.list) {
+        if let List::Pair(expr, tail) = &*Rc::clone(&self.list) {
             self.list = Rc::clone(tail);
             Some(Rc::clone(expr))
         } else {
@@ -89,7 +89,7 @@ impl Iterator for ListVisitor {
 impl std::fmt::Display for List {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            List::Cons(first, tail) => {
+            List::Pair(first, tail) => {
                 write!(f, "{}", first)?;
                 for expr in &**tail {
                     write!(f, " {}", expr)?;
@@ -109,7 +109,7 @@ pub enum Builtin {
     TestMonop(TestMonop),
     NumBinop(NumBinop),
     ListMonop(ListMonop),
-    Cons,
+    Pair,
     Let,
     Eval,
     Define,
@@ -130,7 +130,7 @@ pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
     ("<", Builtin::NumBinop(NumBinop::OrdBinop(OrdBinop::Lt))),
     ("head", Builtin::ListMonop(ListMonop::Head)),
     ("tail", Builtin::ListMonop(ListMonop::Tail)),
-    ("cons", Builtin::Cons),
+    ("pair", Builtin::Pair),
     ("let", Builtin::Let),
     ("eval", Builtin::Eval),
     ("define", Builtin::Define),

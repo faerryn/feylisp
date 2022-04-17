@@ -20,9 +20,6 @@ pub fn standard_env() -> Rc<Environment> {
 
     let (_, env) = eval_src(
         "
-(define car head)
-(define cdr tail)
-
 (define not (lambda (b) (if b #f #t)))
 (define and (lambda (a b) (if a b a)))
 (define or (lambda (a b) (if a a b)))
@@ -33,8 +30,8 @@ pub fn standard_env() -> Rc<Environment> {
 
 (define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
 (define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
-(define map (lambda (f l) (foldr (lambda (x acc) (cons (f x) acc)) l ())))
-(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (cons x acc) acc)) l ())))
+(define map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l ())))
+(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l ())))
 ",
         env,
     ).unwrap();

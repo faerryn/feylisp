@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum Environment {
-    Cons(Rc<String>, Rc<Expression>, Rc<Environment>),
+    Pair(Rc<String>, Rc<Expression>, Rc<Environment>),
     Nil,
 }
 
@@ -15,7 +15,7 @@ impl Environment {
     pub fn core_env() -> Self {
         let mut result = Environment::Nil;
         for (name, value) in crate::expr::BUILTIN_NAME_ALIST {
-            result = Environment::Cons(
+            result = Environment::Pair(
                 Rc::new(name.to_string()),
                 Rc::new(Expression::Builtin(value)),
                 Rc::new(result),
@@ -27,8 +27,8 @@ impl Environment {
     #[must_use]
     pub fn get(&self, ident: &str) -> Option<Rc<Expression>> {
         match self {
-            Environment::Cons(name, value, _) if **name == ident => Some(Rc::clone(value)),
-            Environment::Cons(_, _, parent) => parent.get(ident),
+            Environment::Pair(name, value, _) if **name == ident => Some(Rc::clone(value)),
+            Environment::Pair(_, _, parent) => parent.get(ident),
             Environment::Nil => None,
         }
     }
@@ -37,10 +37,10 @@ impl Environment {
 impl std::fmt::Display for Environment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Environment::Cons(name, value, parent) => {
+            Environment::Pair(name, value, parent) => {
                 write!(f, "{}: {}", name, value)?;
                 match **parent {
-                    Environment::Cons(_, _, _) => write!(f, ", {}", parent),
+                    Environment::Pair(_, _, _) => write!(f, ", {}", parent),
                     Environment::Nil => Ok(()),
                 }
             }
@@ -81,8 +81,9 @@ pub fn eval(
                 Err(Error::FreeVariable(Rc::clone(ident)))
             }
         }
+
         Expression::List(list) => match &**list {
-            List::Cons(rator, rand) => {
+            List::Pair(rator, rand) => {
                 let (rator, env) = eval(Rc::clone(rator), env)?;
                 let rator = rator.ok_or(Error::ExpectedValue)?;
 
@@ -92,6 +93,7 @@ pub fn eval(
                             let [arg] = unpack_args(Rc::clone(rand))?;
                             Ok((Some(arg), env))
                         }
+
                         Builtin::Lambda => {
                             let [params, body] = unpack_args(Rc::clone(rand))?;
                             Ok((
@@ -103,6 +105,7 @@ pub fn eval(
                                 env,
                             ))
                         }
+
                         Builtin::If => {
                             let [cond, when, unless] = unpack_args(Rc::clone(rand))?;
 
@@ -115,6 +118,7 @@ pub fn eval(
                                 eval(when, env)
                             }
                         }
+
                         Builtin::TestMonop(op) => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
 
@@ -135,6 +139,7 @@ pub fn eval(
                                 env,
                             ))
                         }
+
                         Builtin::NumBinop(op) => {
                             let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
@@ -162,6 +167,7 @@ pub fn eval(
                                 env,
                             ))
                         }
+
                         Builtin::ListMonop(op) => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
 
@@ -169,7 +175,7 @@ pub fn eval(
                             let arg = arg.ok_or(Error::ExpectedValue)?;
                             let arg = to_list(arg)?;
 
-                            if let List::Cons(head, tail) = &*arg {
+                            if let List::Pair(head, tail) = &*arg {
                                 Ok((
                                     Some(match op {
                                         ListMonop::Head => Rc::clone(head),
@@ -183,7 +189,8 @@ pub fn eval(
                                 Err(Error::ExpectedPair)
                             }
                         }
-                        Builtin::Cons => {
+
+                        Builtin::Pair => {
                             let [head, tail] = unpack_args(Rc::clone(rand))?;
 
                             let (head, env) = eval(head, env)?;
@@ -194,46 +201,43 @@ pub fn eval(
                             let tail = to_list(tail)?;
 
                             Ok((
-                                Some(Rc::new(Expression::List(Rc::new(List::Cons(head, tail))))),
+                                Some(Rc::new(Expression::List(Rc::new(List::Pair(head, tail))))),
                                 env,
                             ))
                         }
+
                         Builtin::Let => {
                             let [varlist, body] = unpack_args(Rc::clone(rand))?;
-
                             let varlist = to_list(varlist)?;
-
                             let (new_env, env) = create_let_env(varlist, Rc::clone(&env), env)?;
                             let (result, _) = eval(body, new_env)?;
                             Ok((result, env))
                         }
+
                         Builtin::Eval => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
-
                             let (arg, env) = eval(arg, env)?;
                             let arg = arg.ok_or(Error::ExpectedValue)?;
-
                             eval(arg, env)
                         }
+
                         Builtin::Define => {
                             let [name, value] = unpack_args(Rc::clone(rand))?;
-
                             let name = to_symbol(name)?;
-
                             let (value, env) = eval(value, env)?;
                             let value = value.ok_or(Error::ExpectedValue)?;
-
-                            let new_env = Environment::Cons(name, value, env);
+                            let new_env = Environment::Pair(name, value, env);
                             Ok((None, Rc::new(new_env)))
                         }
                     },
+
                     Expression::Closure(Closure {
                         params,
                         body,
                         env: closure_env,
                     }) => {
                         let params = to_list(Rc::clone(params))?;
-                        let (closure_env, new_env) = create_closure_env(
+                        let (closure_env, env) = create_closure_env(
                             params,
                             Rc::clone(rand),
                             0,
@@ -241,13 +245,16 @@ pub fn eval(
                             env,
                         )?;
                         let (result, _) = eval(Rc::clone(body), closure_env)?;
-                        Ok((result, new_env))
+                        Ok((result, env))
                     }
+
                     _ => Err(Error::ExpectedCallable),
                 }
             }
+
             List::Nil => Ok((Some(expr), env)),
         },
+
         _ => Ok((Some(expr), env)),
     }
 }
@@ -257,7 +264,7 @@ fn create_let_env(
     env: Rc<Environment>,
     caller_env: Rc<Environment>,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
-    if let List::Cons(head, tail) = &*varlist {
+    if let List::Pair(head, tail) = &*varlist {
         let head = to_list(Rc::clone(head))?;
 
         let [name, value] = unpack_args(head)?;
@@ -267,7 +274,7 @@ fn create_let_env(
         let (value, caller_env) = eval(value, caller_env)?;
         let value = value.ok_or(Error::ExpectedValue)?;
 
-        let new_env = Environment::Cons(name, value, env);
+        let new_env = Environment::Pair(name, value, env);
         create_let_env(Rc::clone(tail), Rc::new(new_env), caller_env)
     } else {
         Ok((env, caller_env))
@@ -283,12 +290,12 @@ fn create_closure_env(
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
     match (&*params, &*args) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
-        (List::Cons(param, params), List::Cons(arg, args)) => {
+        (List::Pair(param, params), List::Pair(arg, args)) => {
             let param = to_symbol(Rc::clone(param))?;
             let (arg, caller_env) = eval(Rc::clone(arg), caller_env)?;
             let arg = arg.ok_or(Error::ExpectedValue)?;
 
-            let new_env = Environment::Cons(param, arg, new_env);
+            let new_env = Environment::Pair(param, arg, new_env);
 
             create_closure_env(
                 Rc::clone(params),
@@ -298,6 +305,7 @@ fn create_closure_env(
                 caller_env,
             )
         }
+
         _ => {
             let mut expected = matched;
             let params = (&*params).into_iter();
