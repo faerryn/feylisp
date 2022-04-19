@@ -79,6 +79,11 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
+                '\'' => {
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Quote);
+                    state = State::Start;
+                }
                 '0'..='9' => {
                     mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
@@ -102,6 +107,11 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
+                '\'' => {
+                    result.push(Lexeme::Number(sign * mag));
+                    result.push(Lexeme::Quote);
+                    state = State::Start;
+                }
                 '0'..='9' => {
                     mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
@@ -123,6 +133,11 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                 ')' => {
                     result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
                     result.push(Lexeme::Close);
+                    state = State::Start;
+                }
+                '\'' => {
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Quote);
                     state = State::Start;
                 }
                 _ => {
