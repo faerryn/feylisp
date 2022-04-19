@@ -18,8 +18,9 @@ fn main() {
         }
     }
 
-    match repl(env) {
-        Ok(_) => println!(),
-        Err(err) => eprintln!("{}", err),
+    if let Err(err) = repl(env) {
+        eprintln!("{}", err)
+    } else {
+        println!()
     }
 }
