@@ -6,6 +6,10 @@ pub enum Expression {
     Symbol(Rc<String>),
     List(Rc<List>),
     Bool(bool),
+    Callable(Rc<Callable>),
+}
+
+pub enum Callable {
     Builtin(Builtin),
     Closure(Closure),
     Macro(Closure),
@@ -18,10 +22,18 @@ impl std::fmt::Display for Expression {
             Expression::Symbol(symbol) => write!(f, "{}", symbol),
             Expression::List(list) => write!(f, "({})", list),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
-            Expression::Builtin(builtin) => write!(f, "{}", builtin),
-            Expression::Closure(closure) => write!(f, "(lambda {})", closure),
-            Expression::Macro(closure) => write!(f, "(macro {})", closure),
+            Expression::Callable(callable) => match callable.as_ref() {
+                Callable::Builtin(builtin) => write!(f, "{}", builtin),
+                Callable::Closure(closure) => write!(f, "(lambda {})", closure),
+                Callable::Macro(closure) => write!(f, "(macro {})", closure),
+            },
         }
+    }
+}
+
+impl std::fmt::Debug for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -116,7 +128,7 @@ impl std::fmt::Display for List {
 
 pub enum Builtin {
     Quote,
-    Callable(Callable),
+    Enclosure(Enclosure),
     If,
     Type,
     Equal,
@@ -126,6 +138,7 @@ pub enum Builtin {
     Let,
     Eval,
     Define,
+    Apply,
 }
 
 impl std::fmt::Display for Builtin {
@@ -135,13 +148,13 @@ impl std::fmt::Display for Builtin {
             "{}",
             match self {
                 Builtin::Quote => "quote",
-                Builtin::Callable(callable) => match callable {
-                    Callable::Lambda => "lambda",
-                    Callable::Macro => "macro",
+                Builtin::Enclosure(enclosure) => match enclosure {
+                    Enclosure::Lambda => "lambda",
+                    Enclosure::Macro => "macro",
                 },
                 Builtin::If => "if",
                 Builtin::Type => "type",
-                Builtin::Equal => "=",
+                Builtin::Equal => "builtin=",
                 Builtin::NumBinop(op) => match op {
                     NumBinop::ArBinop(op) => match op {
                         ArBinop::Add => "builtin+",
@@ -149,7 +162,7 @@ impl std::fmt::Display for Builtin {
                         ArBinop::Mul => "builtin*",
                         ArBinop::Div => "builtin/",
                     },
-                    NumBinop::Lt => "<",
+                    NumBinop::Lt => "builtin<",
                 },
                 Builtin::ListMonop(op) => match op {
                     ListMonop::Head => "head",
@@ -159,6 +172,7 @@ impl std::fmt::Display for Builtin {
                 Builtin::Let => "let",
                 Builtin::Eval => "eval",
                 Builtin::Define => "define",
+                Builtin::Apply => "apply",
             }
         )
     }
@@ -181,7 +195,7 @@ pub enum ListMonop {
     Tail,
 }
 
-pub enum Callable {
+pub enum Enclosure {
     Lambda,
     Macro,
 }

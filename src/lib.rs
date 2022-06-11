@@ -18,32 +18,7 @@ use std::io::prelude::*;
 pub fn standard_env() -> Rc<Environment> {
     let env = Rc::new(Environment::core_env());
 
-    let (_, env) = eval_src(
-        "
-(define list (lambda (...) ...))
-(define apply (lambda (f a) (eval (pair f a))))
-(define nil? (lambda (v) (= nil v)))
-
-(define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
-(define map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l nil)))
-(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l nil)))
-
-(define not (lambda (b) (if b #f #t)))
-(define and (lambda (a b) (if a b a)))
-(define or (lambda (a b) (if a a b)))
-
-(define <= (lambda (a b) (or (= a b) (< a b))))
-(define > (lambda (a b) (not (<= a b))))
-(define >= (lambda (a b) (not (< a b))))
-
-(define + (lambda (...) (foldr builtin+ ... 0)))
-(define - (lambda (n ...) (if (nil? ...) (builtin- 0 n) (builtin- n (apply + ...)))))
-(define * (lambda (...) (foldr builtin* ... 1)))
-(define / (lambda (n ...) (if (nil? ...) (builtin/ 1 n) (builtin/ n (apply * ...)))))
-",
-        env,
-    ).unwrap();
+    let (_, env) = eval_src(std::include_str!("std.fl"), env).unwrap();
 
     env
 }

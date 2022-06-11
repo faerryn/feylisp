@@ -13,6 +13,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
         Sign,
         Number,
         Symbol,
+        Comment,
     }
 
     let mut result = vec![];
@@ -58,9 +59,8 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                         mag = 10 * mag + (ch as i32 - '0' as i32);
                         state = State::Number;
                     }
-                    _ => {
-                        state = State::Symbol;
-                    }
+                    ';' => state = State::Comment,
+                    _ => state = State::Symbol,
                 }
             }
             State::Sign => match ch {
@@ -87,9 +87,12 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
                 }
-                _ => {
-                    state = State::Symbol;
+                ';' => {
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
+                    result.push(Lexeme::Close);
+                    state = State::Comment;
                 }
+                _ => state = State::Symbol,
             },
             State::Number => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
@@ -115,9 +118,12 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     mag = 10 * mag + (ch as i32 - '0' as i32);
                     state = State::Number;
                 }
-                _ => {
-                    state = State::Symbol;
+                ';' => {
+                    result.push(Lexeme::Number(sign * mag));
+                    result.push(Lexeme::Quote);
+                    state = State::Comment;
                 }
+                _ => state = State::Symbol,
             },
             State::Symbol => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
@@ -139,21 +145,24 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     result.push(Lexeme::Quote);
                     state = State::Start;
                 }
-                _ => {
-                    state = State::Symbol;
+                ';' => {
+                    result.push(Lexeme::Number(sign * mag));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
+                    result.push(Lexeme::Quote);
                 }
+                _ => state = State::Symbol,
+            },
+            State::Comment => match ch {
+                '\n' | '\r' => state = State::Start,
+                _ => {}
             },
         }
     }
 
     match state {
-        State::Start => {}
-        State::Number => {
-            result.push(Lexeme::Number(sign * mag));
-        }
-        State::Symbol | State::Sign => {
-            result.push(Lexeme::Symbol(src[start_index..].to_string()));
-        }
+        State::Start | State::Comment => {}
+        State::Number => result.push(Lexeme::Number(sign * mag)),
+        State::Symbol | State::Sign => result.push(Lexeme::Symbol(src[start_index..].to_string())),
     }
 
     result

@@ -1,4 +1,4 @@
-use crate::{expr::Builtin, expr::Expression, lex::Lexeme};
+use crate::{eval::quote, expr::Expression, lex::Lexeme};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -36,11 +36,7 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
             Lexeme::Symbol(symbol) => Ok(Some(Expression::Symbol(Rc::new(symbol)))),
             Lexeme::Quote => {
                 if let Some(elt) = parse_helper(iter)? {
-                    Ok(Some(Expression::List(Rc::new(
-                        vec![Expression::Builtin(Builtin::Quote), elt]
-                            .into_iter()
-                            .collect(),
-                    ))))
+                    Ok(Some(quote(Rc::new(elt))))
                 } else {
                     Err(Error::UnclosedQuote)
                 }

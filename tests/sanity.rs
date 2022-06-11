@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use feylisp::{eval_src, expr::Expression, standard_env};
+    use feylisp::{
+        eval_src,
+        expr::{Callable, Expression},
+        standard_env,
+    };
     #[test]
     fn factorial() {
         let (exprs, _) = eval_src(
@@ -27,7 +31,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(exprs.len(), 2);
-        assert!(matches!(*exprs[0], Expression::Closure(_)));
+        assert!(matches!(
+            exprs[0].as_ref(),
+            Expression::Callable(callable) if matches!(callable.as_ref(), Callable::Closure(_))
+        ));
         assert!(matches!(*exprs[1], Expression::Number(55)));
     }
 
@@ -35,7 +42,7 @@ mod tests {
     fn foldr() {
         let (exprs, _) = eval_src(
             "
-(map (lambda (x) (+ 1 x)) '(1 2 3))
+(map + '(1 2 3) '(4 5 6))
 ",
             standard_env(),
         )
@@ -45,9 +52,9 @@ mod tests {
         if let Expression::List(list) = &*exprs[0] {
             let list: Vec<_> = list.as_ref().into_iter().collect::<_>();
             assert_eq!(list.len(), 3);
-            assert!(matches!(*list[0], Expression::Number(2)));
-            assert!(matches!(*list[1], Expression::Number(3)));
-            assert!(matches!(*list[2], Expression::Number(4)));
+            assert!(matches!(*list[0], Expression::Number(5)));
+            assert!(matches!(*list[1], Expression::Number(7)));
+            assert!(matches!(*list[2], Expression::Number(9)));
         } else {
             unreachable!();
         }

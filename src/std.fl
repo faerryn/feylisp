@@ -1,0 +1,48 @@
+;;; std.fl -*- mode: lisp; -*-
+
+(define list (lambda (...) ...))
+
+;; We use the Z-combinator to do recursion
+(define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (...) (apply (f f) ...)))))))
+
+(define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (builtin= nil l) v (f (head l) (r (tail l))))))) l)))
+(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l nil)))
+
+(define any (lambda (f l) ((Z (lambda (r) (lambda (l) (if (builtin= nil l) #f (if (f (head l)) #t (r (tail l))))))) l)))
+
+(define map
+    (let ((helper (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l nil)))) ;; helper performs mapping on a single list
+      (lambda (f ...)
+        ((Z (lambda (r) (lambda (ll)
+                     (if (any (lambda (l) (builtin= nil l)) ll)
+                         nil
+                         (pair
+                          (apply f (helper head ll))
+                          (r (helper tail ll)))))))
+         ...))))
+
+(define every (lambda (f ...)
+                ((Z (lambda (r) (lambda (ll)
+                             (if (any (lambda (l) (builtin= nil l)) ll)
+                                 #t
+                                 (if (apply f (map head ll))
+                                     (r (map tail ll))
+                                     #f)))))
+                 ...)))
+
+(define not (lambda (b) (if b #f #t)))
+(define and (lambda (a b) (if a b a)))
+(define or (lambda (a b) (if a a b)))
+
+(define = (lambda (v ...) (every builtin= (pair v ...) ...)))
+(define < (lambda (v ...) (every builtin< (pair v ...) ...)))
+(define > (lambda (v ...) (every (lambda (a b) (< b a)) (pair v ...) ...)))
+(define <= (lambda (v ...) (every (lambda (a b) (or (< a b) (= a b))) (pair v ...) ...)))
+(define >= (lambda (v ...) (every (lambda (a b) (or (> a b) (= a b))) (pair v ...) ...)))
+
+(define nil? (lambda (...) (apply = (pair nil ...))))
+
+(define + (lambda (...) (foldr builtin+ ... 0)))
+(define - (lambda (n ...) (if (nil? ...) (builtin- 0 n) (builtin- n (apply + ...)))))
+(define * (lambda (...) (foldr builtin* ... 1)))
+(define / (lambda (n ...) (if (nil? ...) (builtin/ 1 n) (builtin/ n (apply * ...)))))
