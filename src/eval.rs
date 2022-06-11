@@ -28,9 +28,8 @@ impl Environment {
                 Expression::Builtin(Builtin::Callable(Callable::Macro)),
             ),
             ("if", Expression::Builtin(Builtin::If)),
-            ("nil?", Expression::Builtin(Builtin::TestNil)),
             ("type", Expression::Builtin(Builtin::Type)),
-            ("builtin=", Expression::Builtin(Builtin::Equal)),
+            ("=", Expression::Builtin(Builtin::Equal)),
             (
                 "builtin+",
                 Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
@@ -163,15 +162,6 @@ pub fn eval(
                             } else {
                                 eval(when, env)
                             }
-                        }
-
-                        Builtin::TestNil => {
-                            let [arg] = unpack_args(Rc::clone(rand))?;
-
-                            let (arg, env) = eval(arg, env)?;
-                            let arg = to_list(arg)?;
-
-                            Ok((Rc::new(Expression::Bool(matches!(*arg, List::Nil))), env))
                         }
 
                         Builtin::NumBinop(op) => {

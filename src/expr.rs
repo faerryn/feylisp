@@ -118,7 +118,6 @@ pub enum Builtin {
     Quote,
     Callable(Callable),
     If,
-    TestNil,
     Type,
     Equal,
     NumBinop(NumBinop),
@@ -141,9 +140,8 @@ impl std::fmt::Display for Builtin {
                     Callable::Macro => "macro",
                 },
                 Builtin::If => "if",
-                Builtin::TestNil => "nil?",
                 Builtin::Type => "type",
-                Builtin::Equal => "builtin=",
+                Builtin::Equal => "=",
                 Builtin::NumBinop(op) => match op {
                     NumBinop::ArBinop(op) => match op {
                         ArBinop::Add => "builtin+",
