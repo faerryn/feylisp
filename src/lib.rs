@@ -34,6 +34,10 @@ pub fn standard_env() -> Rc<Environment> {
 (define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
 (define map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l ())))
 (define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l ())))
+
+(define apply (lambda (f a) (eval (pair f a))))
+
+(define + (lambda (...) (foldr _+ ... 0)))
 ",
         env,
     ).unwrap();

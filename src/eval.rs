@@ -11,15 +11,21 @@ pub enum Environment {
 impl Environment {
     #[must_use]
     pub fn core_env() -> Self {
-        let mut result = Environment::Nil;
-        for (name, value) in crate::expr::BUILTIN_NAME_ALIST {
-            result = Environment::Pair(
-                Rc::new(name.to_string()),
+        let mut env = Environment::Nil;
+
+        for (name, value) in crate::expr::CONSTANT_NAMES {
+            env = Environment::Pair(Rc::new(name.to_owned()), Rc::new(value), Rc::new(env));
+        }
+
+        for (name, value) in crate::expr::BUILTIN_NAMES {
+            env = Environment::Pair(
+                Rc::new(name.to_owned()),
                 Rc::new(Expression::Builtin(value)),
-                Rc::new(result),
+                Rc::new(env),
             );
         }
-        result
+
+        env
     }
 
     #[must_use]

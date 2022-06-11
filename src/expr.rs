@@ -125,31 +125,9 @@ pub enum Builtin {
     Define,
 }
 
-pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 19] = [
-    ("quote", Builtin::Quote),
-    ("lambda", Builtin::Callable(Callable::Lambda)),
-    ("macro", Builtin::Callable(Callable::Macro)),
-    ("if", Builtin::If),
-    ("nil?", Builtin::TestNil),
-    ("type", Builtin::Type),
-    ("eql", Builtin::Eql),
-    ("+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
-    ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
-    ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
-    ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-    ("=", Builtin::Eql),
-    ("<", Builtin::NumBinop(NumBinop::Lt)),
-    ("head", Builtin::ListMonop(ListMonop::Head)),
-    ("tail", Builtin::ListMonop(ListMonop::Tail)),
-    ("pair", Builtin::Pair),
-    ("let", Builtin::Let),
-    ("eval", Builtin::Eval),
-    ("define", Builtin::Define),
-];
-
 impl std::fmt::Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (name, value) in BUILTIN_NAME_ALIST {
+        for (name, value) in BUILTIN_NAMES {
             if value == *self {
                 write!(f, "{}", name)?;
                 return Ok(());
@@ -192,3 +170,30 @@ impl std::fmt::Display for Closure {
         write!(f, "({}) {}", self.params, self.body)
     }
 }
+
+pub const CONSTANT_NAMES: [(&str, Expression); 2] = [
+    ("#t", Expression::Bool(true)),
+    ("#f", Expression::Bool(false)),
+];
+
+pub const BUILTIN_NAMES: [(&str, Builtin); 19] = [
+    ("quote", Builtin::Quote),
+    ("lambda", Builtin::Callable(Callable::Lambda)),
+    ("macro", Builtin::Callable(Callable::Macro)),
+    ("if", Builtin::If),
+    ("nil?", Builtin::TestNil),
+    ("type", Builtin::Type),
+    ("eql", Builtin::Eql),
+    ("_+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
+    ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
+    ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
+    ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
+    ("=", Builtin::Eql),
+    ("<", Builtin::NumBinop(NumBinop::Lt)),
+    ("head", Builtin::ListMonop(ListMonop::Head)),
+    ("tail", Builtin::ListMonop(ListMonop::Tail)),
+    ("pair", Builtin::Pair),
+    ("let", Builtin::Let),
+    ("eval", Builtin::Eval),
+    ("define", Builtin::Define),
+];

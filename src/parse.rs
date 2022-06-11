@@ -33,11 +33,7 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
             }
             Lexeme::Close => Err(Error::UnexpectedClose),
             Lexeme::Number(number) => Ok(Some(Expression::Number(number))),
-            Lexeme::Symbol(symbol) => Ok(Some(match symbol.as_str() {
-                "#t" => Expression::Bool(true),
-                "#f" => Expression::Bool(false),
-                _ => Expression::Symbol(Rc::new(symbol)),
-            })),
+            Lexeme::Symbol(symbol) => Ok(Some(Expression::Symbol(Rc::new(symbol)))),
             Lexeme::Quote => {
                 if let Some(elt) = parse_helper(iter)? {
                     Ok(Some(Expression::List(Rc::new(
