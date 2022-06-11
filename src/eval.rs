@@ -26,19 +26,19 @@ pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 22] = [
     ("type", Expression::Builtin(Builtin::Type)),
     ("eql", Expression::Builtin(Builtin::Eql)),
     (
-        "_+",
+        "builtin+",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
     ),
     (
-        "-",
+        "builtin-",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
     ),
     (
-        "*",
+        "builtin*",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
     ),
     (
-        "/",
+        "builtin/",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
     ),
     ("=", Expression::Builtin(Builtin::Eql)),
@@ -56,6 +56,7 @@ pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 22] = [
     ("eval", Expression::Builtin(Builtin::Eval)),
     ("define", Expression::Builtin(Builtin::Define)),
 ];
+pub const ELLIPSIS: &str = "...";
 
 impl Environment {
     #[must_use]
@@ -376,7 +377,7 @@ fn create_closure_env(
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
 
         (List::Pair(param, params), args)
-            if matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_ref() == "...")
+            if matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_ref() == ELLIPSIS)
                 && matches!(*params, List::Nil) =>
         {
             let param = to_symbol(param)?;
@@ -414,13 +415,16 @@ fn create_closure_env(
 
         (params, args) => {
             let mut expected = matched;
-            let params = params.into_iter();
-            for _ in params {
-                expected += 1;
+            let mut params = params.into_iter().peekable();
+            while let Some(param) = params.next() {
+                if !(params.peek().is_none()
+                    && matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_ref() == ELLIPSIS))
+                {
+                    expected += 1;
+                }
             }
 
             let mut received = matched;
-            let args = args.into_iter();
             for _ in args {
                 received += 1;
             }

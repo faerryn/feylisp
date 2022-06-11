@@ -142,10 +142,10 @@ impl std::fmt::Display for Builtin {
                 Builtin::Eql => "eql",
                 Builtin::NumBinop(op) => match op {
                     NumBinop::ArBinop(op) => match op {
-                        ArBinop::Add => "_+",
-                        ArBinop::Sub => "-",
-                        ArBinop::Mul => "*",
-                        ArBinop::Div => "/",
+                        ArBinop::Add => "builtin+",
+                        ArBinop::Sub => "builtin-",
+                        ArBinop::Mul => "builtin*",
+                        ArBinop::Div => "builtin/",
                     },
                     NumBinop::Lt => "<",
                 },

@@ -21,6 +21,12 @@ pub fn standard_env() -> Environment {
     let (_, env) = eval_src(
         "
 (define list (lambda (...) ...))
+(define apply (lambda (f a) (eval (pair f a))))
+
+(define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
+(define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
+(define map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l ())))
+(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l ())))
 
 (define not (lambda (b) (if b #f #t)))
 (define and (lambda (a b) (if a b a)))
@@ -30,14 +36,10 @@ pub fn standard_env() -> Environment {
 (define > (lambda (a b) (not (<= a b))))
 (define >= (lambda (a b) (not (< a b))))
 
-(define Z (lambda (r) ((lambda (f) (f f)) (lambda (f) (r (lambda (x) ((f f) x)))))))
-(define foldr (lambda (f l v) ((Z (lambda (r) (lambda (l) (if (nil? l) v (f (head l) (r (tail l))))))) l)))
-(define map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l ())))
-(define filter (lambda (f l) (foldr (lambda (x acc) (if (f x) (pair x acc) acc)) l ())))
-
-(define apply (lambda (f a) (eval (pair f a))))
-
-(define + (lambda (...) (foldr _+ ... 0)))
+(define + (lambda (...) (foldr builtin+ ... 0)))
+(define - (lambda (n ...) (if (nil? ...) (builtin- 0 n) (builtin- n (apply + ...)))))
+(define * (lambda (...) (foldr builtin* ... 1)))
+(define / (lambda (n ...) (if (nil? ...) (builtin/ 1 n) (builtin/ n (apply * ...)))))
 ",
         env,
     ).unwrap();
