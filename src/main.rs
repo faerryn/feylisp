@@ -1,4 +1,6 @@
-use feylisp::{eval::Environment, eval_src, repl, standard_env};
+use std::rc::Rc;
+
+use feylisp::{eval_src, repl, standard_env};
 
 fn main() {
     let mut env = standard_env();
@@ -12,7 +14,7 @@ fn main() {
         if file == "-" {
             want_repl = true;
         } else if let Ok(src) = std::fs::read_to_string(&file) {
-            match eval_src(&src, Environment::clone(&env)) {
+            match eval_src(&src, Rc::clone(&env)) {
                 Ok((exprs, new_env)) => {
                     for expr in exprs {
                         println!("{}", expr);

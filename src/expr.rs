@@ -61,7 +61,9 @@ impl IntoIterator for List {
     type IntoIter = ListVisitor;
 
     fn into_iter(self) -> Self::IntoIter {
-        ListVisitor { list: self }
+        ListVisitor {
+            list: self,
+        }
     }
 }
 
@@ -191,7 +193,7 @@ pub enum Callable {
 pub struct Closure {
     pub params: List,
     pub body: Rc<Expression>,
-    pub env: Environment,
+    pub env: Rc<Environment>,
 }
 
 impl std::fmt::Display for Closure {

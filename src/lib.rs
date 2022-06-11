@@ -15,8 +15,8 @@ use std::rc::Rc;
 use std::io::prelude::*;
 
 #[must_use]
-pub fn standard_env() -> Environment {
-    let env = Environment::core_env();
+pub fn standard_env() -> Rc<Environment> {
+    let env = Rc::new(Environment::core_env());
 
     let (_, env) = eval_src(
         "
@@ -65,8 +65,8 @@ impl std::error::Error for Error {}
 
 pub fn eval_src(
     src: &str,
-    mut env: Environment,
-) -> Result<(Vec<Rc<Expression>>, Environment), Error> {
+    mut env: Rc<Environment>,
+) -> Result<(Vec<Rc<Expression>>, Rc<Environment>), Error> {
     let exprs = parse(lex(src)).map_err(Error::Parse)?;
     let mut result = vec![];
     result.reserve(exprs.len());
@@ -80,7 +80,7 @@ pub fn eval_src(
     Ok((result, env))
 }
 
-pub fn repl(mut env: Environment) -> Result<Environment, std::io::Error> {
+pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
@@ -96,7 +96,7 @@ pub fn repl(mut env: Environment) -> Result<Environment, std::io::Error> {
         match parse(lex(&src)) {
             Ok(exprs) => {
                 for expr in exprs {
-                    match eval(Rc::new(expr), Environment::clone(&env)) {
+                    match eval(Rc::new(expr), Rc::clone(&env)) {
                         Ok((expr, new_env)) => {
                             env = new_env;
                             println!("{}", expr);
