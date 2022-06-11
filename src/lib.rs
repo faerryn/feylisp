@@ -32,6 +32,7 @@ pub fn standard_env() -> Environment {
 (define and (lambda (a b) (if a b a)))
 (define or (lambda (a b) (if a a b)))
 
+(define = (lambda (v ...) ((Z (lambda (r) (lambda (l) (if (nil? l) #t (if (builtin= v (head l)) (r (tail l)) #f))))) ...)))
 (define <= (lambda (a b) (or (= a b) (< a b))))
 (define > (lambda (a b) (not (<= a b))))
 (define >= (lambda (a b) (not (< a b))))

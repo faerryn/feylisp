@@ -65,21 +65,21 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
             }
             State::Sign => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
                 '\'' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Quote);
                     state = State::Start;
                 }
@@ -121,21 +121,21 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
             },
             State::Symbol => match ch {
                 ' ' | '\t' | '\n' | '\r' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     state = State::Start;
                 }
                 '(' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Open);
                     state = State::Start;
                 }
                 ')' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Close);
                     state = State::Start;
                 }
                 '\'' => {
-                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_owned()));
+                    result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
                     result.push(Lexeme::Quote);
                     state = State::Start;
                 }
@@ -152,7 +152,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
             result.push(Lexeme::Number(sign * mag));
         }
         State::Symbol | State::Sign => {
-            result.push(Lexeme::Symbol(src[start_index..].to_owned()));
+            result.push(Lexeme::Symbol(src[start_index..].to_string()));
         }
     }
 

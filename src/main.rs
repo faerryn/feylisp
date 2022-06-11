@@ -4,7 +4,7 @@ fn main() {
     let mut env = standard_env();
     let mut args = std::env::args().peekable();
 
-    let executable = args.next().unwrap_or_else(|| "feylisp".to_owned());
+    let executable = args.next().unwrap_or_else(|| "feylisp".to_string());
 
     let mut want_repl = args.peek().is_none();
 

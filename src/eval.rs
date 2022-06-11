@@ -8,7 +8,7 @@ pub enum Environment {
     Nil,
 }
 
-pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 22] = [
+pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 21] = [
     ("nil", Expression::List(List::Nil)),
     ("#t", Expression::Bool(true)),
     ("#f", Expression::Bool(false)),
@@ -24,7 +24,7 @@ pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 22] = [
     ("if", Expression::Builtin(Builtin::If)),
     ("nil?", Expression::Builtin(Builtin::TestNil)),
     ("type", Expression::Builtin(Builtin::Type)),
-    ("eql", Expression::Builtin(Builtin::Eql)),
+    ("builtin=", Expression::Builtin(Builtin::Equal)),
     (
         "builtin+",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
@@ -41,7 +41,6 @@ pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 22] = [
         "builtin/",
         Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
     ),
-    ("=", Expression::Builtin(Builtin::Eql)),
     ("<", Expression::Builtin(Builtin::NumBinop(NumBinop::Lt))),
     (
         "head",
@@ -64,7 +63,7 @@ impl Environment {
         let mut env = Environment::Nil;
 
         for (name, value) in DEFAULT_ENVIRONMENT {
-            env = Environment::Pair(Rc::new(name.to_owned()), Rc::new(value), Rc::new(env));
+            env = Environment::Pair(Rc::new(name.to_string()), Rc::new(value), Rc::new(env));
         }
 
         env
@@ -276,25 +275,11 @@ pub fn eval(
                             ))
                         }
 
-                        Builtin::Eql => {
+                        Builtin::Equal => {
                             let [rhs, lhs] = unpack_args(List::clone(rand))?;
-
                             let (rhs, env) = eval(rhs, env)?;
-
                             let (lhs, env) = eval(lhs, env)?;
-
-                            match (rhs.as_ref(), lhs.as_ref()) {
-                                (Expression::Number(lhs), Expression::Number(rhs)) => {
-                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
-                                }
-                                (Expression::Symbol(lhs), Expression::Symbol(rhs)) => {
-                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
-                                }
-                                (Expression::Bool(lhs), Expression::Bool(rhs)) => {
-                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
-                                }
-                                _ => Err(Error::ExpectedLikeType),
-                            }
+                            Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
                         }
                     },
 
@@ -377,7 +362,7 @@ fn create_closure_env(
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
 
         (List::Pair(param, params), args)
-            if matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_ref() == ELLIPSIS)
+            if matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_str() == ELLIPSIS)
                 && matches!(*params, List::Nil) =>
         {
             let param = to_symbol(param)?;
@@ -418,7 +403,7 @@ fn create_closure_env(
             let mut params = params.into_iter().peekable();
             while let Some(param) = params.next() {
                 if !(params.peek().is_none()
-                    && matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_ref() == ELLIPSIS))
+                    && matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_str() == ELLIPSIS))
                 {
                     expected += 1;
                 }

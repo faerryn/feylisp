@@ -25,7 +25,19 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Clone)]
+impl PartialEq for Expression {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Expression::Number(lhs), Expression::Number(rhs)) => lhs == rhs,
+            (Expression::Symbol(lhs), Expression::Symbol(rhs)) => lhs == rhs,
+            (Expression::List(lhs), Expression::List(rhs)) => lhs == rhs,
+            (Expression::Bool(lhs), Expression::Bool(rhs)) => lhs == rhs,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub enum List {
     Pair(Rc<Expression>, Rc<List>),
     Nil,
@@ -102,18 +114,13 @@ impl std::fmt::Display for List {
     }
 }
 
-pub enum Callable {
-    Lambda,
-    Macro,
-}
-
 pub enum Builtin {
     Quote,
     Callable(Callable),
     If,
     TestNil,
     Type,
-    Eql,
+    Equal,
     NumBinop(NumBinop),
     ListMonop(ListMonop),
     Pair,
@@ -136,7 +143,7 @@ impl std::fmt::Display for Builtin {
                 Builtin::If => "if",
                 Builtin::TestNil => "nil?",
                 Builtin::Type => "type",
-                Builtin::Eql => "eql",
+                Builtin::Equal => "builtin=",
                 Builtin::NumBinop(op) => match op {
                     NumBinop::ArBinop(op) => match op {
                         ArBinop::Add => "builtin+",
@@ -174,6 +181,11 @@ pub enum ArBinop {
 pub enum ListMonop {
     Head,
     Tail,
+}
+
+pub enum Callable {
+    Lambda,
+    Macro,
 }
 
 pub struct Closure {
