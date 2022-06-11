@@ -30,15 +30,15 @@
                                      #f)))))
                  ...)))
 
-(define not (lambda (b) (if b #f #t)))
-(define and (lambda (a b) (if a b a)))
-(define or (lambda (a b) (if a a b)))
+(define not (macro (b) (list 'if b #f #t)))
+(define and (macro (a b) (list 'if a b #f)))
+(define or (macro (a b) (list 'if a #t b)))
 
 (define = (lambda (v ...) (every builtin= (pair v ...) ...)))
 (define < (lambda (v ...) (every builtin< (pair v ...) ...)))
-(define > (lambda (v ...) (every (lambda (a b) (< b a)) (pair v ...) ...)))
-(define <= (lambda (v ...) (every (lambda (a b) (or (< a b) (= a b))) (pair v ...) ...)))
-(define >= (lambda (v ...) (every (lambda (a b) (or (> a b) (= a b))) (pair v ...) ...)))
+(define > (lambda (v ...) (every (lambda (a b) (builtin< b a)) (pair v ...) ...)))
+(define <= (lambda (v ...) (every (lambda (a b) (or (builtin< a b) (builtin= a b))) (pair v ...) ...)))
+(define >= (lambda (v ...) (every (lambda (a b) (or (builtin> a b) (builtin= a b))) (pair v ...) ...)))
 
 (define nil? (lambda (...) (apply = (pair nil ...))))
 
