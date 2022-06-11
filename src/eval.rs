@@ -118,7 +118,7 @@ pub fn eval(
     expr: Rc<Expression>,
     env: Rc<Environment>,
 ) -> Result<(Rc<Expression>, Rc<Environment>), Error> {
-    match &*expr {
+    match expr.as_ref() {
         Expression::Symbol(ident) => {
             if let Some(value) = env.get(ident) {
                 Ok((value, env))
@@ -127,11 +127,11 @@ pub fn eval(
             }
         }
 
-        Expression::List(list) => match &**list {
+        Expression::List(list) => match list.as_ref() {
             List::Pair(rator, rand) => {
                 let (rator, env) = eval(Rc::clone(rator), env)?;
 
-                match &*rator {
+                match rator.as_ref() {
                     Expression::Builtin(builtin) => match builtin {
                         Builtin::Quote => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
@@ -203,7 +203,7 @@ pub fn eval(
                             let (arg, env) = eval(arg, env)?;
                             let arg = to_list(arg)?;
 
-                            if let List::Pair(head, tail) = &*arg {
+                            if let List::Pair(head, tail) = arg.as_ref() {
                                 Ok((
                                     match op {
                                         ListMonop::Head => Rc::clone(head),
@@ -259,7 +259,7 @@ pub fn eval(
                             let (arg, env) = eval(arg, env)?;
 
                             Ok((
-                                Rc::new(Expression::Symbol(Rc::new(String::from(match &*arg {
+                                Rc::new(Expression::Symbol(Rc::new(String::from(match arg.as_ref() {
                                     Expression::Number(_) => "number",
                                     Expression::Symbol(_) => "symbol",
                                     Expression::List(_) => "list",
@@ -331,7 +331,7 @@ fn create_let_env(
     env: Rc<Environment>,
     caller_env: Rc<Environment>,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
-    if let List::Pair(head, tail) = &*varlist {
+    if let List::Pair(head, tail) = varlist.as_ref() {
         let head = to_list(Rc::clone(head))?;
 
         let [name, value] = unpack_args(head)?;
@@ -355,7 +355,7 @@ fn create_closure_env(
     caller_env: Rc<Environment>,
     eval_args: bool,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
-    match (&*params, &*args) {
+    match (params.as_ref(), args.as_ref()) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
 
         (List::Pair(param, params), _)
@@ -416,7 +416,7 @@ fn create_closure_env(
 }
 
 fn unpack_args<const S: usize>(list: Rc<List>) -> Result<[Rc<Expression>; S], Error> {
-    let result: Vec<_> = (&*list).into_iter().collect();
+    let result: Vec<_> = list.as_ref().into_iter().collect();
     let result_len = result.len();
 
     result.try_into().map_err(|_| Error::MismatchedOperand {
@@ -426,28 +426,28 @@ fn unpack_args<const S: usize>(list: Rc<List>) -> Result<[Rc<Expression>; S], Er
 }
 
 fn to_number(expr: Rc<Expression>) -> Result<i32, Error> {
-    match &*expr {
+    match expr.as_ref() {
         Expression::Number(num) => Ok(*num),
         _ => Err(Error::ExpectedNumber),
     }
 }
 
 fn to_list(expr: Rc<Expression>) -> Result<Rc<List>, Error> {
-    match &*expr {
+    match expr.as_ref() {
         Expression::List(list) => Ok(Rc::clone(list)),
         _ => Err(Error::ExpectedList),
     }
 }
 
 fn to_symbol(expr: Rc<Expression>) -> Result<Rc<String>, Error> {
-    match &*expr {
+    match expr.as_ref() {
         Expression::Symbol(symbol) => Ok(Rc::clone(symbol)),
         _ => Err(Error::ExpectedSymbol),
     }
 }
 
 fn eval_list(list: Rc<List>, env: Rc<Environment>) -> Result<(Rc<List>, Rc<Environment>), Error> {
-    match &*list {
+    match list.as_ref() {
         List::Pair(head, tail) => {
             let (head, env) = eval(Rc::clone(head), env)?;
             let (tail, env) = eval_list(Rc::clone(tail), env)?;

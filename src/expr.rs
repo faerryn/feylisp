@@ -90,7 +90,7 @@ impl Iterator for ListVisitor {
     type Item = Rc<Expression>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let List::Pair(expr, tail) = &*Rc::clone(&self.list) {
+        if let List::Pair(expr, tail) = Rc::clone(&self.list).as_ref() {
             self.list = Rc::clone(tail);
             Some(Rc::clone(expr))
         } else {
@@ -104,7 +104,7 @@ impl std::fmt::Display for List {
         match self {
             List::Pair(first, tail) => {
                 write!(f, "{}", first)?;
-                for expr in &**tail {
+                for expr in tail.as_ref() {
                     write!(f, " {}", expr)?;
                 }
                 Ok(())
