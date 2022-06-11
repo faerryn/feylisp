@@ -1,7 +1,6 @@
 use crate::eval::Environment;
 use std::rc::Rc;
 
-#[derive(Debug)]
 pub enum Expression {
     Number(i32),
     Symbol(Rc<String>),
@@ -26,7 +25,7 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum List {
     Pair(Rc<Expression>, Rc<List>),
     Nil,
@@ -103,13 +102,11 @@ impl std::fmt::Display for List {
     }
 }
 
-#[derive(Debug, PartialEq)]
 pub enum Callable {
     Lambda,
     Macro,
 }
 
-#[derive(Debug, PartialEq)]
 pub enum Builtin {
     Quote,
     Callable(Callable),
@@ -162,13 +159,11 @@ impl std::fmt::Display for Builtin {
     }
 }
 
-#[derive(Debug, PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     Lt,
 }
 
-#[derive(Debug, PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -176,13 +171,11 @@ pub enum ArBinop {
     Div,
 }
 
-#[derive(Debug, PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
 }
 
-#[derive(Debug)]
 pub struct Closure {
     pub params: List,
     pub body: Rc<Expression>,

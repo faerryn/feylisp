@@ -2,7 +2,7 @@ use crate::expr::{ArBinop, Builtin, Callable, Closure, Expression, List, ListMon
 
 use std::rc::Rc;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Environment {
     Pair(Rc<String>, Rc<Expression>, Rc<Environment>),
     Nil,
