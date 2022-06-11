@@ -1,4 +1,4 @@
-use crate::expr::{ArBinop, Builtin, Closure, Expression, List, ListMonop, NumBinop};
+use crate::expr::{ArBinop, Builtin, Callable, Closure, Expression, List, ListMonop, NumBinop};
 
 use std::rc::Rc;
 
@@ -91,17 +91,19 @@ pub fn eval(
                             Ok((arg, env))
                         }
 
-                        Builtin::Lambda => {
+                        Builtin::Callable(callable) => {
                             let [params, body] = unpack_args(Rc::clone(rand))?;
                             let params = to_list(params)?;
-                            Ok((
-                                Rc::new(Expression::Closure(Closure {
-                                    params,
-                                    body,
-                                    env: Rc::clone(&env),
-                                })),
-                                env,
-                            ))
+                            let closure = Closure {
+                                params,
+                                body,
+                                env: Rc::clone(&env),
+                            };
+                            let closure = match callable {
+                                Callable::Lambda => Expression::Closure(closure),
+                                Callable::Macro => Expression::Macro(closure),
+                            };
+                            Ok((Rc::new(closure), env))
                         }
 
                         Builtin::If => {
@@ -204,6 +206,7 @@ pub fn eval(
                             let new_env = Environment::Pair(name, Rc::clone(&value), env);
                             Ok((value, Rc::new(new_env)))
                         }
+
                         Builtin::Type => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
                             let (arg, env) = eval(arg, env)?;
@@ -216,10 +219,12 @@ pub fn eval(
                                     Expression::Bool(_) => "bool",
                                     Expression::Builtin(_) => "builting",
                                     Expression::Closure(_) => "closure",
+                                    Expression::Macro(_) => "macro",
                                 })))),
                                 env,
                             ))
                         }
+
                         Builtin::Eql => {
                             let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
@@ -253,8 +258,27 @@ pub fn eval(
                             0,
                             Rc::clone(closure_env),
                             env,
+                            true,
                         )?;
                         let (result, _) = eval(Rc::clone(body), closure_env)?;
+                        Ok((result, env))
+                    }
+
+                    Expression::Macro(Closure {
+                        params,
+                        body,
+                        env: closure_env,
+                    }) => {
+                        let (closure_env, env) = create_closure_env(
+                            Rc::clone(params),
+                            Rc::clone(rand),
+                            0,
+                            Rc::clone(closure_env),
+                            env,
+                            false,
+                        )?;
+                        let (result, closure_env) = eval(Rc::clone(body), closure_env)?;
+                        let (result, _) = eval(result, closure_env)?;
                         Ok((result, env))
                     }
 
@@ -296,6 +320,7 @@ fn create_closure_env(
     matched: usize,
     new_env: Rc<Environment>,
     caller_env: Rc<Environment>,
+    eval_args: bool,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
     match (&*params, &*args) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
@@ -305,7 +330,11 @@ fn create_closure_env(
                 && matches!(**params, List::Nil) =>
         {
             let param = to_symbol(Rc::clone(param))?;
-            let (args, caller_env) = eval_list(args, caller_env)?;
+            let (args, caller_env) = if eval_args {
+                eval_list(args, caller_env)?
+            } else {
+                (args, caller_env)
+            };
 
             let new_env = Environment::Pair(param, Rc::new(Expression::List(args)), new_env);
             Ok((Rc::new(new_env), caller_env))
@@ -313,7 +342,12 @@ fn create_closure_env(
 
         (List::Pair(param, params), List::Pair(arg, args)) => {
             let param = to_symbol(Rc::clone(param))?;
-            let (arg, caller_env) = eval(Rc::clone(arg), caller_env)?;
+
+            let (arg, caller_env) = if eval_args {
+                eval(Rc::clone(arg), caller_env)?
+            } else {
+                (Rc::clone(arg), caller_env)
+            };
 
             let new_env = Environment::Pair(param, arg, new_env);
 
@@ -323,6 +357,7 @@ fn create_closure_env(
                 matched + 1,
                 Rc::new(new_env),
                 caller_env,
+                eval_args,
             )
         }
 

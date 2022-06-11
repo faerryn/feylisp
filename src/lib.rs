@@ -20,6 +20,8 @@ pub fn standard_env() -> Rc<Environment> {
 
     let (_, env) = eval_src(
         "
+(define list (lambda (...) ...))
+
 (define not (lambda (b) (if b #f #t)))
 (define and (lambda (a b) (if a b a)))
 (define or (lambda (a b) (if a a b)))

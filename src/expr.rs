@@ -9,6 +9,7 @@ pub enum Expression {
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
+    Macro(Closure),
 }
 
 impl std::fmt::Display for Expression {
@@ -20,6 +21,7 @@ impl std::fmt::Display for Expression {
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Builtin(builtin) => write!(f, "{}", builtin),
             Expression::Closure(closure) => write!(f, "(lambda {})", closure),
+            Expression::Macro(closure) => write!(f, "(macro {})", closure),
         }
     }
 }
@@ -102,9 +104,15 @@ impl std::fmt::Display for List {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Callable {
+    Lambda,
+    Macro,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Builtin {
     Quote,
-    Lambda,
+    Callable(Callable),
     If,
     TestNil,
     Type,
@@ -117,9 +125,10 @@ pub enum Builtin {
     Define,
 }
 
-pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 18] = [
+pub const BUILTIN_NAME_ALIST: [(&str, Builtin); 19] = [
     ("quote", Builtin::Quote),
-    ("lambda", Builtin::Lambda),
+    ("lambda", Builtin::Callable(Callable::Lambda)),
+    ("macro", Builtin::Callable(Callable::Macro)),
     ("if", Builtin::If),
     ("nil?", Builtin::TestNil),
     ("type", Builtin::Type),
