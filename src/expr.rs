@@ -4,7 +4,7 @@ use std::rc::Rc;
 pub enum Expression {
     Number(i32),
     Symbol(Rc<String>),
-    List(List),
+    List(Rc<List>),
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
@@ -37,7 +37,7 @@ impl PartialEq for Expression {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 pub enum List {
     Pair(Rc<Expression>, Rc<List>),
     Nil,
@@ -62,7 +62,7 @@ impl IntoIterator for List {
 
     fn into_iter(self) -> Self::IntoIter {
         ListVisitor {
-            list: self,
+            list: Rc::new(self),
         }
     }
 }
@@ -74,27 +74,25 @@ impl IntoIterator for &List {
 
     fn into_iter(self) -> Self::IntoIter {
         ListVisitor {
-            list: match self {
+            list: Rc::new(match self {
                 List::Pair(head, tail) => List::Pair(Rc::clone(head), Rc::clone(tail)),
                 List::Nil => List::Nil,
-            },
+            }),
         }
     }
 }
 
 pub struct ListVisitor {
-    list: List,
+    list: Rc<List>,
 }
 
 impl Iterator for ListVisitor {
     type Item = Rc<Expression>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut other = List::Nil;
-        std::mem::swap(&mut self.list, &mut other);
-        if let List::Pair(expr, tail) = other {
-            self.list = List::clone(&tail);
-            Some(Rc::clone(&expr))
+        if let List::Pair(expr, tail) = &*Rc::clone(&self.list) {
+            self.list = Rc::clone(tail);
+            Some(Rc::clone(expr))
         } else {
             None
         }
@@ -191,7 +189,7 @@ pub enum Callable {
 }
 
 pub struct Closure {
-    pub params: List,
+    pub params: Rc<List>,
     pub body: Rc<Expression>,
     pub env: Rc<Environment>,
 }

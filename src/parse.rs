@@ -29,18 +29,18 @@ fn parse_helper<I: Iterator<Item = Lexeme>>(iter: &mut I) -> Result<Option<Expre
                         Err(err) => return Err(err),
                     }
                 }
-                Ok(Some(Expression::List(list.into_iter().collect())))
+                Ok(Some(Expression::List(Rc::new(list.into_iter().collect()))))
             }
             Lexeme::Close => Err(Error::UnexpectedClose),
             Lexeme::Number(number) => Ok(Some(Expression::Number(number))),
             Lexeme::Symbol(symbol) => Ok(Some(Expression::Symbol(Rc::new(symbol)))),
             Lexeme::Quote => {
                 if let Some(elt) = parse_helper(iter)? {
-                    Ok(Some(Expression::List(
+                    Ok(Some(Expression::List(Rc::new(
                         vec![Expression::Builtin(Builtin::Quote), elt]
                             .into_iter()
                             .collect(),
-                    )))
+                    ))))
                 } else {
                     Err(Error::UnclosedQuote)
                 }

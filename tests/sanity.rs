@@ -43,7 +43,7 @@ mod tests {
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::List(_)));
         if let Expression::List(list) = &*exprs[0] {
-            let list: Vec<_> = list.into_iter().collect::<_>();
+            let list: Vec<_> = list.as_ref().into_iter().collect::<_>();
             assert_eq!(list.len(), 3);
             assert!(matches!(*list[0], Expression::Number(2)));
             assert!(matches!(*list[1], Expression::Number(3)));

@@ -7,53 +7,6 @@ pub enum Environment {
     Nil,
 }
 
-pub const DEFAULT_ENVIRONMENT: [(&str, Expression); 21] = [
-    ("nil", Expression::List(List::Nil)),
-    ("#t", Expression::Bool(true)),
-    ("#f", Expression::Bool(false)),
-    ("quote", Expression::Builtin(Builtin::Quote)),
-    (
-        "lambda",
-        Expression::Builtin(Builtin::Callable(Callable::Lambda)),
-    ),
-    (
-        "macro",
-        Expression::Builtin(Builtin::Callable(Callable::Macro)),
-    ),
-    ("if", Expression::Builtin(Builtin::If)),
-    ("nil?", Expression::Builtin(Builtin::TestNil)),
-    ("type", Expression::Builtin(Builtin::Type)),
-    ("builtin=", Expression::Builtin(Builtin::Equal)),
-    (
-        "builtin+",
-        Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
-    ),
-    (
-        "builtin-",
-        Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
-    ),
-    (
-        "builtin*",
-        Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
-    ),
-    (
-        "builtin/",
-        Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-    ),
-    ("<", Expression::Builtin(Builtin::NumBinop(NumBinop::Lt))),
-    (
-        "head",
-        Expression::Builtin(Builtin::ListMonop(ListMonop::Head)),
-    ),
-    (
-        "tail",
-        Expression::Builtin(Builtin::ListMonop(ListMonop::Tail)),
-    ),
-    ("pair", Expression::Builtin(Builtin::Pair)),
-    ("let", Expression::Builtin(Builtin::Let)),
-    ("eval", Expression::Builtin(Builtin::Eval)),
-    ("define", Expression::Builtin(Builtin::Define)),
-];
 pub const ELLIPSIS: &str = "...";
 
 impl Environment {
@@ -61,7 +14,55 @@ impl Environment {
     pub fn core_env() -> Self {
         let mut env = Environment::Nil;
 
-        for (name, value) in DEFAULT_ENVIRONMENT {
+        let default_environment = [
+            ("nil", Expression::List(Rc::new(List::Nil))),
+            ("#t", Expression::Bool(true)),
+            ("#f", Expression::Bool(false)),
+            ("quote", Expression::Builtin(Builtin::Quote)),
+            (
+                "lambda",
+                Expression::Builtin(Builtin::Callable(Callable::Lambda)),
+            ),
+            (
+                "macro",
+                Expression::Builtin(Builtin::Callable(Callable::Macro)),
+            ),
+            ("if", Expression::Builtin(Builtin::If)),
+            ("nil?", Expression::Builtin(Builtin::TestNil)),
+            ("type", Expression::Builtin(Builtin::Type)),
+            ("builtin=", Expression::Builtin(Builtin::Equal)),
+            (
+                "builtin+",
+                Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
+            ),
+            (
+                "builtin-",
+                Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
+            ),
+            (
+                "builtin*",
+                Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
+            ),
+            (
+                "builtin/",
+                Expression::Builtin(Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
+            ),
+            ("<", Expression::Builtin(Builtin::NumBinop(NumBinop::Lt))),
+            (
+                "head",
+                Expression::Builtin(Builtin::ListMonop(ListMonop::Head)),
+            ),
+            (
+                "tail",
+                Expression::Builtin(Builtin::ListMonop(ListMonop::Tail)),
+            ),
+            ("pair", Expression::Builtin(Builtin::Pair)),
+            ("let", Expression::Builtin(Builtin::Let)),
+            ("eval", Expression::Builtin(Builtin::Eval)),
+            ("define", Expression::Builtin(Builtin::Define)),
+        ];
+
+        for (name, value) in default_environment {
             env = Environment::Pair(Rc::new(name.to_string()), Rc::new(value), Rc::new(env));
         }
 
@@ -126,19 +127,19 @@ pub fn eval(
             }
         }
 
-        Expression::List(list) => match &*list {
+        Expression::List(list) => match &**list {
             List::Pair(rator, rand) => {
                 let (rator, env) = eval(Rc::clone(rator), env)?;
 
                 match &*rator {
                     Expression::Builtin(builtin) => match builtin {
                         Builtin::Quote => {
-                            let [arg] = unpack_args(List::clone(rand))?;
+                            let [arg] = unpack_args(Rc::clone(rand))?;
                             Ok((arg, env))
                         }
 
                         Builtin::Callable(callable) => {
-                            let [params, body] = unpack_args(List::clone(rand))?;
+                            let [params, body] = unpack_args(Rc::clone(rand))?;
                             let params = to_list(params)?;
                             let closure = Closure {
                                 params,
@@ -153,7 +154,7 @@ pub fn eval(
                         }
 
                         Builtin::If => {
-                            let [cond, when, unless] = unpack_args(List::clone(rand))?;
+                            let [cond, when, unless] = unpack_args(Rc::clone(rand))?;
 
                             let (cond, env) = eval(cond, env)?;
 
@@ -165,16 +166,16 @@ pub fn eval(
                         }
 
                         Builtin::TestNil => {
-                            let [arg] = unpack_args(List::clone(rand))?;
+                            let [arg] = unpack_args(Rc::clone(rand))?;
 
                             let (arg, env) = eval(arg, env)?;
                             let arg = to_list(arg)?;
 
-                            Ok((Rc::new(Expression::Bool(matches!(arg, List::Nil))), env))
+                            Ok((Rc::new(Expression::Bool(matches!(*arg, List::Nil))), env))
                         }
 
                         Builtin::NumBinop(op) => {
-                            let [rhs, lhs] = unpack_args(List::clone(rand))?;
+                            let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
                             let (rhs, env) = eval(rhs, env)?;
                             let rhs = to_number(rhs)?;
@@ -197,17 +198,17 @@ pub fn eval(
                         }
 
                         Builtin::ListMonop(op) => {
-                            let [arg] = unpack_args(List::clone(rand))?;
+                            let [arg] = unpack_args(Rc::clone(rand))?;
 
                             let (arg, env) = eval(arg, env)?;
                             let arg = to_list(arg)?;
 
-                            if let List::Pair(head, tail) = arg {
+                            if let List::Pair(head, tail) = &*arg {
                                 Ok((
                                     match op {
-                                        ListMonop::Head => head,
+                                        ListMonop::Head => Rc::clone(head),
                                         ListMonop::Tail => {
-                                            Rc::new(Expression::List(List::clone(&tail)))
+                                            Rc::new(Expression::List(Rc::clone(tail)))
                                         }
                                     },
                                     env,
@@ -218,7 +219,7 @@ pub fn eval(
                         }
 
                         Builtin::Pair => {
-                            let [head, tail] = unpack_args(List::clone(rand))?;
+                            let [head, tail] = unpack_args(Rc::clone(rand))?;
 
                             let (head, env) = eval(head, env)?;
 
@@ -226,13 +227,13 @@ pub fn eval(
                             let tail = to_list(tail)?;
 
                             Ok((
-                                Rc::new(Expression::List(List::Pair(head, Rc::new(tail)))),
+                                Rc::new(Expression::List(Rc::new(List::Pair(head, tail)))),
                                 env,
                             ))
                         }
 
                         Builtin::Let => {
-                            let [varlist, body] = unpack_args(List::clone(rand))?;
+                            let [varlist, body] = unpack_args(Rc::clone(rand))?;
                             let varlist = to_list(varlist)?;
                             let (new_env, env) = create_let_env(varlist, Rc::clone(&env), env)?;
                             let (result, _) = eval(body, new_env)?;
@@ -240,13 +241,13 @@ pub fn eval(
                         }
 
                         Builtin::Eval => {
-                            let [arg] = unpack_args(List::clone(rand))?;
+                            let [arg] = unpack_args(Rc::clone(rand))?;
                             let (arg, env) = eval(arg, env)?;
                             eval(arg, env)
                         }
 
                         Builtin::Define => {
-                            let [name, value] = unpack_args(List::clone(rand))?;
+                            let [name, value] = unpack_args(Rc::clone(rand))?;
                             let name = to_symbol(name)?;
                             let (value, env) = eval(value, env)?;
                             let new_env = Environment::Pair(name, Rc::clone(&value), env);
@@ -254,27 +255,25 @@ pub fn eval(
                         }
 
                         Builtin::Type => {
-                            let [arg] = unpack_args(List::clone(rand))?;
+                            let [arg] = unpack_args(Rc::clone(rand))?;
                             let (arg, env) = eval(arg, env)?;
 
                             Ok((
-                                Rc::new(Expression::Symbol(Rc::new(String::from(
-                                    match arg.as_ref() {
-                                        Expression::Number(_) => "number",
-                                        Expression::Symbol(_) => "symbol",
-                                        Expression::List(_) => "list",
-                                        Expression::Bool(_) => "bool",
-                                        Expression::Builtin(_) => "builting",
-                                        Expression::Closure(_) => "closure",
-                                        Expression::Macro(_) => "macro",
-                                    },
-                                )))),
+                                Rc::new(Expression::Symbol(Rc::new(String::from(match &*arg {
+                                    Expression::Number(_) => "number",
+                                    Expression::Symbol(_) => "symbol",
+                                    Expression::List(_) => "list",
+                                    Expression::Bool(_) => "bool",
+                                    Expression::Builtin(_) => "builting",
+                                    Expression::Closure(_) => "closure",
+                                    Expression::Macro(_) => "macro",
+                                })))),
                                 env,
                             ))
                         }
 
                         Builtin::Equal => {
-                            let [rhs, lhs] = unpack_args(List::clone(rand))?;
+                            let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
                             let (rhs, env) = eval(rhs, env)?;
                             let (lhs, env) = eval(lhs, env)?;
                             Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
@@ -287,8 +286,8 @@ pub fn eval(
                         env: closure_env,
                     }) => {
                         let (closure_env, env) = create_closure_env(
-                            List::clone(params),
-                            List::clone(rand),
+                            Rc::clone(params),
+                            Rc::clone(rand),
                             0,
                             Rc::clone(closure_env),
                             env,
@@ -304,8 +303,8 @@ pub fn eval(
                         env: closure_env,
                     }) => {
                         let (closure_env, env) = create_closure_env(
-                            List::clone(params),
-                            List::clone(rand),
+                            Rc::clone(params),
+                            Rc::clone(rand),
                             0,
                             Rc::clone(closure_env),
                             env,
@@ -328,12 +327,12 @@ pub fn eval(
 }
 
 fn create_let_env(
-    varlist: List,
+    varlist: Rc<List>,
     env: Rc<Environment>,
     caller_env: Rc<Environment>,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
-    if let List::Pair(head, tail) = varlist {
-        let head = to_list(head)?;
+    if let List::Pair(head, tail) = &*varlist {
+        let head = to_list(Rc::clone(head))?;
 
         let [name, value] = unpack_args(head)?;
 
@@ -342,28 +341,28 @@ fn create_let_env(
         let (value, caller_env) = eval(value, caller_env)?;
 
         let new_env = Environment::Pair(name, value, env);
-        create_let_env(List::clone(&tail), Rc::new(new_env), caller_env)
+        create_let_env(Rc::clone(tail), Rc::new(new_env), caller_env)
     } else {
         Ok((env, caller_env))
     }
 }
 
 fn create_closure_env(
-    params: List,
-    args: List,
+    params: Rc<List>,
+    args: Rc<List>,
     matched: usize,
     new_env: Rc<Environment>,
     caller_env: Rc<Environment>,
     eval_args: bool,
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
-    match (params, args) {
+    match (&*params, &*args) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
 
-        (List::Pair(param, params), args)
+        (List::Pair(param, params), _)
             if matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_str() == ELLIPSIS)
-                && matches!(*params, List::Nil) =>
+                && matches!(params.as_ref(), List::Nil) =>
         {
-            let param = to_symbol(param)?;
+            let param = to_symbol(Rc::clone(param))?;
             let (args, caller_env) = if eval_args {
                 eval_list(args, caller_env)?
             } else {
@@ -375,19 +374,19 @@ fn create_closure_env(
         }
 
         (List::Pair(param, params), List::Pair(arg, args)) => {
-            let param = to_symbol(param)?;
+            let param = to_symbol(Rc::clone(param))?;
 
             let (arg, caller_env) = if eval_args {
-                eval(arg, caller_env)?
+                eval(Rc::clone(arg), caller_env)?
             } else {
-                (arg, caller_env)
+                (Rc::clone(arg), caller_env)
             };
 
             let new_env = Environment::Pair(param, arg, new_env);
 
             create_closure_env(
-                List::clone(&params),
-                List::clone(&args),
+                Rc::clone(params),
+                Rc::clone(args),
                 matched + 1,
                 Rc::new(new_env),
                 caller_env,
@@ -395,9 +394,9 @@ fn create_closure_env(
             )
         }
 
-        (params, args) => {
+        _ => {
             let mut expected = matched;
-            let mut params = params.into_iter().peekable();
+            let mut params = params.as_ref().into_iter().peekable();
             while let Some(param) = params.next() {
                 if !(params.peek().is_none()
                     && matches!(param.as_ref(), Expression::Symbol(symbol) if symbol.as_str() == ELLIPSIS))
@@ -407,7 +406,7 @@ fn create_closure_env(
             }
 
             let mut received = matched;
-            for _ in args {
+            for _ in args.as_ref().into_iter() {
                 received += 1;
             }
 
@@ -416,8 +415,8 @@ fn create_closure_env(
     }
 }
 
-fn unpack_args<const S: usize>(list: List) -> Result<[Rc<Expression>; S], Error> {
-    let result: Vec<_> = list.into_iter().collect();
+fn unpack_args<const S: usize>(list: Rc<List>) -> Result<[Rc<Expression>; S], Error> {
+    let result: Vec<_> = (&*list).into_iter().collect();
     let result_len = result.len();
 
     result.try_into().map_err(|_| Error::MismatchedOperand {
@@ -433,9 +432,9 @@ fn to_number(expr: Rc<Expression>) -> Result<i32, Error> {
     }
 }
 
-fn to_list(expr: Rc<Expression>) -> Result<List, Error> {
+fn to_list(expr: Rc<Expression>) -> Result<Rc<List>, Error> {
     match &*expr {
-        Expression::List(list) => Ok(List::clone(list)),
+        Expression::List(list) => Ok(Rc::clone(list)),
         _ => Err(Error::ExpectedList),
     }
 }
@@ -447,12 +446,12 @@ fn to_symbol(expr: Rc<Expression>) -> Result<Rc<String>, Error> {
     }
 }
 
-fn eval_list(list: List, env: Rc<Environment>) -> Result<(List, Rc<Environment>), Error> {
-    match list {
+fn eval_list(list: Rc<List>, env: Rc<Environment>) -> Result<(Rc<List>, Rc<Environment>), Error> {
+    match &*list {
         List::Pair(head, tail) => {
-            let (head, env) = eval(head, env)?;
-            let (tail, env) = eval_list(List::clone(&tail), env)?;
-            Ok((List::Pair(head, Rc::new(tail)), env))
+            let (head, env) = eval(Rc::clone(head), env)?;
+            let (tail, env) = eval_list(Rc::clone(tail), env)?;
+            Ok((Rc::new(List::Pair(head, tail)), env))
         }
         List::Nil => Ok((list, env)),
     }
