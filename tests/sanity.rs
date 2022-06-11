@@ -6,8 +6,8 @@ mod tests {
         let (exprs, _) = eval_src(
             "
 (let ((fact-partial (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
-(let ((fact (Z fact-partial)))
-(fact 5)))
+  (let ((fact (Z fact-partial)))
+    (fact 5)))
 ",
             standard_env(),
         )
@@ -26,8 +26,9 @@ mod tests {
             standard_env(),
         )
         .unwrap();
-        assert_eq!(exprs.len(), 1);
-        assert!(matches!(*exprs[0], Expression::Number(55)));
+        assert_eq!(exprs.len(), 2);
+        assert!(matches!(*exprs[0], Expression::Closure(_)));
+        assert!(matches!(*exprs[1], Expression::Number(55)));
     }
 
     #[test]
@@ -42,7 +43,7 @@ mod tests {
         assert!(exprs.len() == 1);
         assert!(matches!(*exprs[0], Expression::List(_)));
         if let Expression::List(list) = &*exprs[0] {
-            let list: Vec<_> = (&**list).into_iter().collect::<_>();
+            let list: Vec<_> = list.into_iter().collect::<_>();
             assert_eq!(list.len(), 3);
             assert!(matches!(*list[0], Expression::Number(2)));
             assert!(matches!(*list[1], Expression::Number(3)));
