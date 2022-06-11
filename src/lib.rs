@@ -64,9 +64,7 @@ pub fn eval_src(
 
     for expr in exprs {
         let (expr, new_env) = eval(Rc::new(expr), env).map_err(Error::Eval)?;
-        if let Some(expr) = expr {
-            result.push(expr);
-        }
+        result.push(expr);
         env = new_env;
     }
 
@@ -92,9 +90,7 @@ pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error>
                     match eval(Rc::new(expr), Rc::clone(&env)) {
                         Ok((expr, new_env)) => {
                             env = new_env;
-                            if let Some(expr) = expr {
-                                println!("{}", expr);
-                            }
+                            println!("{}", expr);
                         }
                         Err(err) => {
                             eprintln!("{}", err);

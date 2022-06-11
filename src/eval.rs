@@ -49,7 +49,6 @@ impl std::fmt::Display for Environment {
 
 #[derive(Debug)]
 pub enum Error {
-    ExpectedValue,
     ExpectedCallable,
     ExpectedList,
     ExpectedPair,
@@ -71,11 +70,11 @@ impl std::error::Error for Error {}
 pub fn eval(
     expr: Rc<Expression>,
     env: Rc<Environment>,
-) -> Result<(Option<Rc<Expression>>, Rc<Environment>), Error> {
+) -> Result<(Rc<Expression>, Rc<Environment>), Error> {
     match &*expr {
         Expression::Symbol(ident) => {
             if let Some(value) = env.get(ident) {
-                Ok((Some(value), env))
+                Ok((value, env))
             } else {
                 Err(Error::FreeVariable(Rc::clone(ident)))
             }
@@ -84,24 +83,23 @@ pub fn eval(
         Expression::List(list) => match &**list {
             List::Pair(rator, rand) => {
                 let (rator, env) = eval(Rc::clone(rator), env)?;
-                let rator = rator.ok_or(Error::ExpectedValue)?;
 
                 match &*rator {
                     Expression::Builtin(builtin) => match builtin {
                         Builtin::Quote => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
-                            Ok((Some(arg), env))
+                            Ok((arg, env))
                         }
 
                         Builtin::Lambda => {
                             let [params, body] = unpack_args(Rc::clone(rand))?;
                             let params = to_list(params)?;
                             Ok((
-                                Some(Rc::new(Expression::Closure(Closure {
+                                Rc::new(Expression::Closure(Closure {
                                     params,
                                     body,
                                     env: Rc::clone(&env),
-                                }))),
+                                })),
                                 env,
                             ))
                         }
@@ -110,7 +108,6 @@ pub fn eval(
                             let [cond, when, unless] = unpack_args(Rc::clone(rand))?;
 
                             let (cond, env) = eval(cond, env)?;
-                            let cond = cond.ok_or(Error::ExpectedValue)?;
 
                             if matches!(*cond, Expression::Bool(false)) {
                                 eval(unless, env)
@@ -123,28 +120,22 @@ pub fn eval(
                             let [arg] = unpack_args(Rc::clone(rand))?;
 
                             let (arg, env) = eval(arg, env)?;
-                            let arg = arg.ok_or(Error::ExpectedValue)?;
                             let arg = to_list(arg)?;
 
-                            Ok((
-                                Some(Rc::new(Expression::Bool(matches!(*arg, List::Nil)))),
-                                env,
-                            ))
+                            Ok((Rc::new(Expression::Bool(matches!(*arg, List::Nil))), env))
                         }
 
                         Builtin::NumBinop(op) => {
                             let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
                             let (rhs, env) = eval(rhs, env)?;
-                            let rhs = rhs.ok_or(Error::ExpectedValue)?;
                             let rhs = to_number(rhs)?;
 
                             let (lhs, env) = eval(lhs, env)?;
-                            let lhs = lhs.ok_or(Error::ExpectedValue)?;
                             let lhs = to_number(lhs)?;
 
                             Ok((
-                                Some(Rc::new(match op {
+                                Rc::new(match op {
                                     NumBinop::ArBinop(op) => Expression::Number(match op {
                                         ArBinop::Add => rhs + lhs,
                                         ArBinop::Sub => rhs - lhs,
@@ -152,7 +143,7 @@ pub fn eval(
                                         ArBinop::Div => rhs / lhs,
                                     }),
                                     NumBinop::Lt => Expression::Bool(rhs < lhs),
-                                })),
+                                }),
                                 env,
                             ))
                         }
@@ -161,17 +152,16 @@ pub fn eval(
                             let [arg] = unpack_args(Rc::clone(rand))?;
 
                             let (arg, env) = eval(arg, env)?;
-                            let arg = arg.ok_or(Error::ExpectedValue)?;
                             let arg = to_list(arg)?;
 
                             if let List::Pair(head, tail) = &*arg {
                                 Ok((
-                                    Some(match op {
+                                    match op {
                                         ListMonop::Head => Rc::clone(head),
                                         ListMonop::Tail => {
                                             Rc::new(Expression::List(Rc::clone(tail)))
                                         }
-                                    }),
+                                    },
                                     env,
                                 ))
                             } else {
@@ -183,14 +173,12 @@ pub fn eval(
                             let [head, tail] = unpack_args(Rc::clone(rand))?;
 
                             let (head, env) = eval(head, env)?;
-                            let head = head.ok_or(Error::ExpectedValue)?;
 
                             let (tail, env) = eval(tail, env)?;
-                            let tail = tail.ok_or(Error::ExpectedValue)?;
                             let tail = to_list(tail)?;
 
                             Ok((
-                                Some(Rc::new(Expression::List(Rc::new(List::Pair(head, tail))))),
+                                Rc::new(Expression::List(Rc::new(List::Pair(head, tail)))),
                                 env,
                             ))
                         }
@@ -206,7 +194,6 @@ pub fn eval(
                         Builtin::Eval => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
                             let (arg, env) = eval(arg, env)?;
-                            let arg = arg.ok_or(Error::ExpectedValue)?;
                             eval(arg, env)
                         }
 
@@ -214,26 +201,22 @@ pub fn eval(
                             let [name, value] = unpack_args(Rc::clone(rand))?;
                             let name = to_symbol(name)?;
                             let (value, env) = eval(value, env)?;
-                            let value = value.ok_or(Error::ExpectedValue)?;
-                            let new_env = Environment::Pair(name, value, env);
-                            Ok((None, Rc::new(new_env)))
+                            let new_env = Environment::Pair(name, Rc::clone(&value), env);
+                            Ok((value, Rc::new(new_env)))
                         }
                         Builtin::Type => {
                             let [arg] = unpack_args(Rc::clone(rand))?;
                             let (arg, env) = eval(arg, env)?;
-                            let arg = arg.ok_or(Error::ExpectedValue)?;
 
                             Ok((
-                                Some(Rc::new(Expression::Symbol(Rc::new(String::from(
-                                    match &*arg {
-                                        Expression::Number(_) => "number",
-                                        Expression::Symbol(_) => "symbol",
-                                        Expression::List(_) => "list",
-                                        Expression::Bool(_) => "bool",
-                                        Expression::Builtin(_) => "builting",
-                                        Expression::Closure(_) => "closure",
-                                    },
-                                ))))),
+                                Rc::new(Expression::Symbol(Rc::new(String::from(match &*arg {
+                                    Expression::Number(_) => "number",
+                                    Expression::Symbol(_) => "symbol",
+                                    Expression::List(_) => "list",
+                                    Expression::Bool(_) => "bool",
+                                    Expression::Builtin(_) => "builting",
+                                    Expression::Closure(_) => "closure",
+                                })))),
                                 env,
                             ))
                         }
@@ -241,20 +224,18 @@ pub fn eval(
                             let [rhs, lhs] = unpack_args(Rc::clone(rand))?;
 
                             let (rhs, env) = eval(rhs, env)?;
-                            let rhs = rhs.ok_or(Error::ExpectedValue)?;
 
                             let (lhs, env) = eval(lhs, env)?;
-                            let lhs = lhs.ok_or(Error::ExpectedValue)?;
 
                             match (&*rhs, &*lhs) {
                                 (Expression::Number(lhs), Expression::Number(rhs)) => {
-                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
                                 }
                                 (Expression::Symbol(lhs), Expression::Symbol(rhs)) => {
-                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
                                 }
                                 (Expression::Bool(lhs), Expression::Bool(rhs)) => {
-                                    Ok((Some(Rc::new(Expression::Bool(lhs == rhs))), env))
+                                    Ok((Rc::new(Expression::Bool(lhs == rhs)), env))
                                 }
                                 _ => Err(Error::ExpectedLikeType),
                             }
@@ -281,10 +262,10 @@ pub fn eval(
                 }
             }
 
-            List::Nil => Ok((Some(expr), env)),
+            List::Nil => Ok((expr, env)),
         },
 
-        _ => Ok((Some(expr), env)),
+        _ => Ok((expr, env)),
     }
 }
 
@@ -301,7 +282,6 @@ fn create_let_env(
         let name = to_symbol(name)?;
 
         let (value, caller_env) = eval(value, caller_env)?;
-        let value = value.ok_or(Error::ExpectedValue)?;
 
         let new_env = Environment::Pair(name, value, env);
         create_let_env(Rc::clone(tail), Rc::new(new_env), caller_env)
@@ -319,10 +299,21 @@ fn create_closure_env(
 ) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
     match (&*params, &*args) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
+
+        (List::Pair(param, params), _)
+            if matches!(&**param, Expression::Symbol(symbol) if symbol.as_ref() == "...")
+                && matches!(**params, List::Nil) =>
+        {
+            let param = to_symbol(Rc::clone(param))?;
+            let (args, caller_env) = eval_list(args, caller_env)?;
+
+            let new_env = Environment::Pair(param, Rc::new(Expression::List(args)), new_env);
+            Ok((Rc::new(new_env), caller_env))
+        }
+
         (List::Pair(param, params), List::Pair(arg, args)) => {
             let param = to_symbol(Rc::clone(param))?;
             let (arg, caller_env) = eval(Rc::clone(arg), caller_env)?;
-            let arg = arg.ok_or(Error::ExpectedValue)?;
 
             let new_env = Environment::Pair(param, arg, new_env);
 
@@ -381,5 +372,16 @@ fn to_symbol(expr: Rc<Expression>) -> Result<Rc<String>, Error> {
     match &*expr {
         Expression::Symbol(symbol) => Ok(Rc::clone(symbol)),
         _ => Err(Error::ExpectedSymbol),
+    }
+}
+
+fn eval_list(list: Rc<List>, env: Rc<Environment>) -> Result<(Rc<List>, Rc<Environment>), Error> {
+    match &*list {
+        List::Pair(head, tail) => {
+            let (head, env) = eval(Rc::clone(head), env)?;
+            let (tail, env) = eval_list(Rc::clone(tail), env)?;
+            Ok((Rc::new(List::Pair(head, tail)), env))
+        }
+        List::Nil => Ok((list, env)),
     }
 }
