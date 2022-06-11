@@ -2,7 +2,7 @@ use crate::expr::{ArBinop, Builtin, Callable, Closure, Expression, List, ListMon
 
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Environment {
     Pair(Rc<String>, Rc<Expression>, Rc<Environment>),
     Nil,
@@ -116,8 +116,8 @@ impl std::error::Error for Error {}
 
 pub fn eval(
     expr: Rc<Expression>,
-    env: Rc<Environment>,
-) -> Result<(Rc<Expression>, Rc<Environment>), Error> {
+    env: Environment,
+) -> Result<(Rc<Expression>, Environment), Error> {
     match &*expr {
         Expression::Symbol(ident) => {
             if let Some(value) = env.get(ident) {
@@ -144,7 +144,7 @@ pub fn eval(
                             let closure = Closure {
                                 params,
                                 body,
-                                env: Rc::clone(&env),
+                                env: Environment::clone(&env),
                             };
                             let closure = match callable {
                                 Callable::Lambda => Expression::Closure(closure),
@@ -235,7 +235,8 @@ pub fn eval(
                         Builtin::Let => {
                             let [varlist, body] = unpack_args(List::clone(rand))?;
                             let varlist = to_list(varlist)?;
-                            let (new_env, env) = create_let_env(varlist, Rc::clone(&env), env)?;
+                            let (new_env, env) =
+                                create_let_env(varlist, Environment::clone(&env), env)?;
                             let (result, _) = eval(body, new_env)?;
                             Ok((result, env))
                         }
@@ -250,8 +251,8 @@ pub fn eval(
                             let [name, value] = unpack_args(List::clone(rand))?;
                             let name = to_symbol(name)?;
                             let (value, env) = eval(value, env)?;
-                            let new_env = Environment::Pair(name, Rc::clone(&value), env);
-                            Ok((value, Rc::new(new_env)))
+                            let new_env = Environment::Pair(name, Rc::clone(&value), Rc::new(env));
+                            Ok((value, new_env))
                         }
 
                         Builtin::Type => {
@@ -305,7 +306,7 @@ pub fn eval(
                             List::clone(params),
                             List::clone(rand),
                             0,
-                            Rc::clone(closure_env),
+                            Environment::clone(closure_env),
                             env,
                             true,
                         )?;
@@ -322,7 +323,7 @@ pub fn eval(
                             List::clone(params),
                             List::clone(rand),
                             0,
-                            Rc::clone(closure_env),
+                            Environment::clone(closure_env),
                             env,
                             false,
                         )?;
@@ -344,9 +345,9 @@ pub fn eval(
 
 fn create_let_env(
     varlist: List,
-    env: Rc<Environment>,
-    caller_env: Rc<Environment>,
-) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
+    env: Environment,
+    caller_env: Environment,
+) -> Result<(Environment, Environment), Error> {
     if let List::Pair(head, tail) = varlist {
         let head = to_list(head)?;
 
@@ -356,8 +357,8 @@ fn create_let_env(
 
         let (value, caller_env) = eval(value, caller_env)?;
 
-        let new_env = Environment::Pair(name, value, env);
-        create_let_env(List::clone(&tail), Rc::new(new_env), caller_env)
+        let new_env = Environment::Pair(name, value, Rc::new(env));
+        create_let_env(List::clone(&tail), new_env, caller_env)
     } else {
         Ok((env, caller_env))
     }
@@ -367,10 +368,10 @@ fn create_closure_env(
     params: List,
     args: List,
     matched: usize,
-    new_env: Rc<Environment>,
-    caller_env: Rc<Environment>,
+    new_env: Environment,
+    caller_env: Environment,
     eval_args: bool,
-) -> Result<(Rc<Environment>, Rc<Environment>), Error> {
+) -> Result<(Environment, Environment), Error> {
     match (params, args) {
         (List::Nil, List::Nil) => Ok((new_env, caller_env)),
 
@@ -385,8 +386,9 @@ fn create_closure_env(
                 (args, caller_env)
             };
 
-            let new_env = Environment::Pair(param, Rc::new(Expression::List(args)), new_env);
-            Ok((Rc::new(new_env), caller_env))
+            let new_env =
+                Environment::Pair(param, Rc::new(Expression::List(args)), Rc::new(new_env));
+            Ok((new_env, caller_env))
         }
 
         (List::Pair(param, params), List::Pair(arg, args)) => {
@@ -398,13 +400,13 @@ fn create_closure_env(
                 (arg, caller_env)
             };
 
-            let new_env = Environment::Pair(param, arg, new_env);
+            let new_env = Environment::Pair(param, arg, Rc::new(new_env));
 
             create_closure_env(
                 List::clone(&params),
                 List::clone(&args),
                 matched + 1,
-                Rc::new(new_env),
+                new_env,
                 caller_env,
                 eval_args,
             )
@@ -459,7 +461,7 @@ fn to_symbol(expr: Rc<Expression>) -> Result<Rc<String>, Error> {
     }
 }
 
-fn eval_list(list: List, env: Rc<Environment>) -> Result<(List, Rc<Environment>), Error> {
+fn eval_list(list: List, env: Environment) -> Result<(List, Environment), Error> {
     match list {
         List::Pair(head, tail) => {
             let (head, env) = eval(head, env)?;
