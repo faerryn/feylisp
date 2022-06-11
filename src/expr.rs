@@ -5,7 +5,7 @@ use std::rc::Rc;
 pub enum Expression {
     Number(i32),
     Symbol(Rc<String>),
-    List(Rc<List>),
+    List(List),
     Bool(bool),
     Builtin(Builtin),
     Closure(Closure),
@@ -26,7 +26,7 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum List {
     Pair(Rc<Expression>, Rc<List>),
     Nil,
@@ -51,7 +51,7 @@ impl IntoIterator for List {
 
     fn into_iter(self) -> Self::IntoIter {
         ListVisitor {
-            list: Rc::new(self),
+            list: self,
         }
     }
 }
@@ -63,25 +63,27 @@ impl IntoIterator for &List {
 
     fn into_iter(self) -> Self::IntoIter {
         ListVisitor {
-            list: Rc::new(match self {
+            list: match self {
                 List::Pair(head, tail) => List::Pair(Rc::clone(head), Rc::clone(tail)),
                 List::Nil => List::Nil,
-            }),
+            },
         }
     }
 }
 
 pub struct ListVisitor {
-    list: Rc<List>,
+    list: List,
 }
 
 impl Iterator for ListVisitor {
     type Item = Rc<Expression>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let List::Pair(expr, tail) = &*Rc::clone(&self.list) {
-            self.list = Rc::clone(tail);
-            Some(Rc::clone(expr))
+        let mut other = List::Nil;
+        std::mem::swap(&mut self.list, &mut other);
+        if let List::Pair(expr, tail) = other {
+            self.list = List::clone(&tail);
+            Some(Rc::clone(&expr))
         } else {
             None
         }
@@ -127,14 +129,38 @@ pub enum Builtin {
 
 impl std::fmt::Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (name, value) in BUILTIN_NAMES {
-            if value == *self {
-                write!(f, "{}", name)?;
-                return Ok(());
+        write!(
+            f,
+            "{}",
+            match self {
+                Builtin::Quote => "quote",
+                Builtin::Callable(callable) => match callable {
+                    Callable::Lambda => "lambda",
+                    Callable::Macro => "macro",
+                },
+                Builtin::If => "if",
+                Builtin::TestNil => "nil?",
+                Builtin::Type => "type",
+                Builtin::Eql => "eql",
+                Builtin::NumBinop(op) => match op {
+                    NumBinop::ArBinop(op) => match op {
+                        ArBinop::Add => "_+",
+                        ArBinop::Sub => "-",
+                        ArBinop::Mul => "*",
+                        ArBinop::Div => "/",
+                    },
+                    NumBinop::Lt => "<",
+                },
+                Builtin::ListMonop(op) => match op {
+                    ListMonop::Head => "head",
+                    ListMonop::Tail => "tail",
+                },
+                Builtin::Pair => "pair",
+                Builtin::Let => "let",
+                Builtin::Eval => "eval",
+                Builtin::Define => "define",
             }
-        }
-
-        Err(std::fmt::Error)
+        )
     }
 }
 
@@ -160,7 +186,7 @@ pub enum ListMonop {
 
 #[derive(Debug)]
 pub struct Closure {
-    pub params: Rc<List>,
+    pub params: List,
     pub body: Rc<Expression>,
     pub env: Rc<Environment>,
 }
@@ -170,30 +196,3 @@ impl std::fmt::Display for Closure {
         write!(f, "({}) {}", self.params, self.body)
     }
 }
-
-pub const CONSTANT_NAMES: [(&str, Expression); 2] = [
-    ("#t", Expression::Bool(true)),
-    ("#f", Expression::Bool(false)),
-];
-
-pub const BUILTIN_NAMES: [(&str, Builtin); 19] = [
-    ("quote", Builtin::Quote),
-    ("lambda", Builtin::Callable(Callable::Lambda)),
-    ("macro", Builtin::Callable(Callable::Macro)),
-    ("if", Builtin::If),
-    ("nil?", Builtin::TestNil),
-    ("type", Builtin::Type),
-    ("eql", Builtin::Eql),
-    ("_+", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Add))),
-    ("-", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Sub))),
-    ("*", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Mul))),
-    ("/", Builtin::NumBinop(NumBinop::ArBinop(ArBinop::Div))),
-    ("=", Builtin::Eql),
-    ("<", Builtin::NumBinop(NumBinop::Lt)),
-    ("head", Builtin::ListMonop(ListMonop::Head)),
-    ("tail", Builtin::ListMonop(ListMonop::Tail)),
-    ("pair", Builtin::Pair),
-    ("let", Builtin::Let),
-    ("eval", Builtin::Eval),
-    ("define", Builtin::Define),
-];
