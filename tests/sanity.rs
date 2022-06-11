@@ -6,7 +6,7 @@ mod tests {
         standard_env,
     };
     #[test]
-    fn factorial() {
+    fn let_binding_factorial() {
         let (exprs, _) = eval_src(
             "
 (let ((fact-partial (lambda (f) (lambda (n) (if (= n 0) 1 (* n (f (- n 1))))))))
@@ -21,7 +21,7 @@ mod tests {
     }
 
     #[test]
-    fn fibonnaci() {
+    fn define_fibonnaci() {
         let (exprs, _) = eval_src(
             "
 (define fib (Z (lambda (f) (lambda (n) (if (< n 2) n (+ (f (- n 1)) (f (- n 2))))))))
@@ -39,7 +39,7 @@ mod tests {
     }
 
     #[test]
-    fn foldr() {
+    fn varargs_map() {
         let (exprs, _) = eval_src(
             "
 (map + '(1 2 3) '(4 5 6))
