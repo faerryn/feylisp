@@ -40,8 +40,6 @@
 (define <= (lambda (v ...) (every (lambda (a b) (or (builtin< a b) (builtin= a b))) (pair v ...) ...)))
 (define >= (lambda (v ...) (every (lambda (a b) (or (builtin> a b) (builtin= a b))) (pair v ...) ...)))
 
-(define nil? (lambda (...) (apply = (pair nil ...))))
-
 (define + (lambda (...) (foldr builtin+ ... 0)))
 (define - (lambda (n ...) (if (nil? ...) (builtin- 0 n) (builtin- n (apply + ...)))))
 (define * (lambda (...) (foldr builtin* ... 1)))
