@@ -120,7 +120,7 @@ impl Environment {
     #[must_use]
     pub fn get(&self, ident: &str) -> Option<Rc<Expression>> {
         match self {
-            Environment::Pair(name, value, _) if **name == ident => Some(Rc::clone(value)),
+            Environment::Pair(name, value, _) if name.as_ref() == ident => Some(Rc::clone(value)),
             Environment::Pair(_, _, parent) => parent.get(ident),
             Environment::Nil => None,
         }
@@ -132,7 +132,7 @@ impl std::fmt::Display for Environment {
         match self {
             Environment::Pair(name, value, parent) => {
                 write!(f, "{}: {}", name, value)?;
-                match **parent {
+                match parent.as_ref() {
                     Environment::Pair(_, _, _) => write!(f, ", {}", parent),
                     Environment::Nil => Ok(()),
                 }
@@ -225,7 +225,7 @@ fn call(
 
                 let (cond, env) = eval(cond, env)?;
 
-                if matches!(*cond, Expression::Bool(false)) {
+                if matches!(cond.as_ref(), Expression::Bool(false)) {
                     eval(unless, env)
                 } else {
                     eval(when, env)
@@ -355,7 +355,7 @@ fn call(
         }) => {
             let (args, env) = eval_list(rand, env)?;
             let (closure_env, env) =
-                create_closure_env(Rc::clone(params), args, 0, Rc::clone(closure_env), env)?;
+                create_call_env(Rc::clone(params), args, 0, Rc::clone(closure_env), env)?;
             let (result, _) = eval(Rc::clone(body), closure_env)?;
             Ok((result, env))
         }
@@ -366,7 +366,7 @@ fn call(
             env: closure_env,
         }) => {
             let (closure_env, env) =
-                create_closure_env(Rc::clone(params), rand, 0, Rc::clone(closure_env), env)?;
+                create_call_env(Rc::clone(params), rand, 0, Rc::clone(closure_env), env)?;
             let (result, closure_env) = eval(Rc::clone(body), closure_env)?;
             let (result, _) = eval(result, closure_env)?;
             Ok((result, env))
@@ -395,7 +395,7 @@ fn create_let_env(
     }
 }
 
-fn create_closure_env(
+fn create_call_env(
     params: Rc<List>,
     args: Rc<List>,
     matched: usize,
@@ -419,7 +419,7 @@ fn create_closure_env(
 
             let new_env = Environment::Pair(param, Rc::clone(arg), new_env);
 
-            create_closure_env(
+            create_call_env(
                 Rc::clone(params),
                 Rc::clone(args),
                 matched + 1,
