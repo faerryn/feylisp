@@ -10,23 +10,23 @@
 
 (define any (lambda (f l) ((Z (lambda (r) (lambda (l) (if (builtin= nil l) #f (if (f (head l)) #t (r (tail l))))))) l)))
 
+(define _map (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l nil)))
 (define map
-    (let ((helper (lambda (f l) (foldr (lambda (x acc) (pair (f x) acc)) l nil)))) ;; helper performs mapping on a single list
-      (lambda (f ...)
+    (lambda (f ...)
         ((Z (lambda (r) (lambda (ll)
                      (if (any (lambda (l) (builtin= nil l)) ll)
                          nil
                          (pair
-                          (apply f (helper head ll))
-                          (r (helper tail ll)))))))
-         ...))))
+                          (apply f (_map head ll))
+                          (r (_map tail ll)))))))
+         ...)))
 
 (define every (lambda (f ...)
                 ((Z (lambda (r) (lambda (ll)
                              (if (any (lambda (l) (builtin= nil l)) ll)
                                  #t
-                                 (if (apply f (map head ll))
-                                     (r (map tail ll))
+                                 (if (apply f (_map head ll))
+                                     (r (_map tail ll))
                                      #f)))))
                  ...)))
 
