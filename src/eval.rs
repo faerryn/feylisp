@@ -496,8 +496,5 @@ pub fn quote(expr: Rc<Expression>) -> Expression {
         Builtin::Quote,
     ))));
     let nil = Rc::new(List::Nil);
-    Expression::List(Rc::new(List::Pair(
-        quote,
-        Rc::new(List::Pair(expr, nil)),
-    )))
+    Expression::List(Rc::new(List::Pair(quote, Rc::new(List::Pair(expr, nil)))))
 }
