@@ -41,6 +41,6 @@
 (define >= (lambda (v ...) (every (lambda (a b) (or (builtin> a b) (builtin= a b))) (pair v ...) ...)))
 
 (define + (lambda (...) (foldr builtin+ ... 0)))
-(define - (lambda (n ...) (if (nil? ...) (builtin- 0 n) (builtin- n (apply + ...)))))
+(define - (lambda (n ...) (if (= nil ...) (builtin- 0 n) (builtin- n (apply + ...)))))
 (define * (lambda (...) (foldr builtin* ... 1)))
-(define / (lambda (n ...) (if (nil? ...) (builtin/ 1 n) (builtin/ n (apply * ...)))))
+(define / (lambda (n ...) (if (= nil ...) (builtin/ 1 n) (builtin/ n (apply * ...)))))
