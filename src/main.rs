@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use std::rc::Rc;
 
 use feylisp::{eval_src, repl, standard_env};
@@ -17,20 +19,20 @@ fn main() {
             match eval_src(&src, Rc::clone(&env)) {
                 Ok((exprs, new_env)) => {
                     for expr in exprs {
-                        println!("{}", expr);
+                        println!("{expr}");
                     }
                     env = new_env;
                 }
-                Err(err) => eprintln!("{}", err),
+                Err(err) => eprintln!("{err}"),
             }
         } else {
-            eprintln!("{}: {}: No such file or directory", executable, file);
+            eprintln!("{executable}: {file}: No such file or directory");
         }
     }
 
     if want_repl {
         match repl(env) {
-            Err(err) => eprintln!("{}", err),
+            Err(err) => eprintln!("{err}"),
             Ok(_) => println!(),
         }
     }

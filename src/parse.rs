@@ -10,7 +10,7 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -51,7 +51,7 @@ pub fn parse(src: Vec<Lexeme>) -> Result<Vec<Expression>, Error> {
     let mut result = vec![];
     let mut iter = src.into_iter();
     while let Some(expr) = parse_helper(&mut iter)? {
-        result.push(expr)
+        result.push(expr);
     }
     Ok(result)
 }

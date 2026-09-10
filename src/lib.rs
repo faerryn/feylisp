@@ -1,10 +1,14 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+
 pub mod eval;
 pub mod expr;
 pub mod lex;
 pub mod parse;
 
 use crate::{
-    eval::{eval, Environment},
+    eval::{Environment, eval},
     expr::Expression,
     lex::lex,
     parse::parse,
@@ -32,7 +36,7 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -43,8 +47,7 @@ pub fn eval_src(
     mut env: Rc<Environment>,
 ) -> Result<(Vec<Rc<Expression>>, Rc<Environment>), Error> {
     let exprs = parse(lex(src)).map_err(Error::Parse)?;
-    let mut result = vec![];
-    result.reserve(exprs.len());
+    let mut result = Vec::with_capacity(exprs.len());
 
     for expr in exprs {
         let (expr, new_env) = eval(Rc::new(expr), env).map_err(Error::Eval)?;
@@ -74,10 +77,10 @@ pub fn repl(mut env: Rc<Environment>) -> Result<Rc<Environment>, std::io::Error>
                     match eval(Rc::new(expr), Rc::clone(&env)) {
                         Ok((expr, new_env)) => {
                             env = new_env;
-                            println!("{}", expr);
+                            println!("{expr}");
                         }
                         Err(err) => {
-                            eprintln!("{}", err);
+                            eprintln!("{err}");
                         }
                     }
                 }

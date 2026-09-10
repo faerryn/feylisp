@@ -23,7 +23,7 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
     let mut sign = 0;
     let mut mag = 0;
 
-    for (curr_index, ch) in src.chars().enumerate() {
+    for (curr_index, ch) in src.char_indices() {
         match state {
             State::Start => {
                 start_index = curr_index;

@@ -19,14 +19,14 @@ pub enum Callable {
 impl std::fmt::Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Number(number) => write!(f, "{}", number),
-            Expression::Symbol(symbol) => write!(f, "{}", symbol),
-            Expression::List(list) => write!(f, "({})", list),
+            Expression::Number(number) => write!(f, "{number}"),
+            Expression::Symbol(symbol) => write!(f, "{symbol}"),
+            Expression::List(list) => write!(f, "({list})"),
             Expression::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Expression::Callable(callable) => match callable.as_ref() {
-                Callable::Builtin(builtin) => write!(f, "{}", builtin),
-                Callable::Closure(closure) => write!(f, "(lambda {})", closure),
-                Callable::Macro(closure) => write!(f, "(macro {})", closure),
+                Callable::Builtin(builtin) => write!(f, "{builtin}"),
+                Callable::Closure(closure) => write!(f, "(lambda {closure})"),
+                Callable::Macro(closure) => write!(f, "(macro {closure})"),
             },
         }
     }
@@ -34,7 +34,7 @@ impl std::fmt::Display for Expression {
 
 impl std::fmt::Debug for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -55,6 +55,13 @@ impl PartialEq for Expression {
 pub enum List {
     Pair(Rc<Expression>, Rc<List>),
     Nil,
+}
+
+impl List {
+    #[must_use]
+    pub fn iter(&self) -> ListVisitor {
+        <&Self as IntoIterator>::into_iter(self)
+    }
 }
 
 impl FromIterator<Expression> for List {
@@ -117,9 +124,9 @@ impl std::fmt::Display for List {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             List::Pair(first, tail) => {
-                write!(f, "{}", first)?;
+                write!(f, "{first}")?;
                 for expr in tail.as_ref() {
-                    write!(f, " {}", expr)?;
+                    write!(f, " {expr}")?;
                 }
                 Ok(())
             }

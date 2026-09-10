@@ -132,9 +132,9 @@ impl std::fmt::Display for Environment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Environment::Pair(name, value, parent) => {
-                write!(f, "{}: {}", name, value)?;
+                write!(f, "{name}: {value}")?;
                 match parent.as_ref() {
-                    Environment::Pair(_, _, _) => write!(f, ", {}", parent),
+                    Environment::Pair(_, _, _) => write!(f, ", {parent}"),
                     Environment::Nil => Ok(()),
                 }
             }
@@ -156,7 +156,7 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -441,7 +441,7 @@ fn create_call_env(
             }
 
             let mut received = matched;
-            for _ in args.as_ref().into_iter() {
+            for _ in args.as_ref() {
                 received += 1;
             }
 
@@ -492,6 +492,7 @@ fn eval_list(list: Rc<List>, env: Rc<Environment>) -> Result<(Rc<List>, Rc<Envir
     }
 }
 
+#[must_use]
 pub fn quote(expr: Rc<Expression>) -> Expression {
     let quote = Rc::new(Expression::Callable(Rc::new(Callable::Builtin(
         Builtin::Quote,
