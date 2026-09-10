@@ -156,7 +156,17 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            Error::ExpectedCallable(expression) => write!(f, "expected callable, got {expression}"),
+            Error::ExpectedList(expression) => write!(f, "expected list, got {expression}"),
+            Error::ExpectedPair(expression) => write!(f, "expected pair, got {expression}"),
+            Error::ExpectedNumber(expression) => write!(f, "expected number, got {expression}"),
+            Error::ExpectedSymbol(expression) => write!(f, "expected symbol, got {expression}"),
+            Error::MismatchedOperand { received, expected } => {
+                write!(f, "expected {expected}, got {received}")
+            }
+            Error::FreeVariable(name) => write!(f, "symbol {name} is not bound"),
+        }
     }
 }
 
