@@ -163,7 +163,7 @@ impl std::fmt::Display for Error {
             Error::ExpectedNumber(expression) => write!(f, "expected number, got {expression}"),
             Error::ExpectedSymbol(expression) => write!(f, "expected symbol, got {expression}"),
             Error::MismatchedOperand { received, expected } => {
-                write!(f, "expected {expected}, got {received}")
+                write!(f, "expected {expected} arguments, got {received}")
             }
             Error::FreeVariable(name) => write!(f, "symbol {name} is not bound"),
         }
