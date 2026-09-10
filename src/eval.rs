@@ -4,6 +4,7 @@ use crate::expr::{
 
 use std::rc::Rc;
 
+#[derive(PartialEq)]
 pub enum Environment {
     Pair(Rc<String>, Rc<Expression>, Rc<Environment>),
     Nil,

@@ -9,6 +9,7 @@ pub enum Expression {
     Callable(Rc<Callable>),
 }
 
+#[derive(PartialEq)]
 pub enum Callable {
     Builtin(Builtin),
     Closure(Closure),
@@ -44,6 +45,7 @@ impl PartialEq for Expression {
             (Expression::Symbol(lhs), Expression::Symbol(rhs)) => lhs == rhs,
             (Expression::List(lhs), Expression::List(rhs)) => lhs == rhs,
             (Expression::Bool(lhs), Expression::Bool(rhs)) => lhs == rhs,
+            (Expression::Callable(lhs), Expression::Callable(rhs)) => lhs == rhs,
             _ => false,
         }
     }
@@ -126,6 +128,7 @@ impl std::fmt::Display for List {
     }
 }
 
+#[derive(PartialEq)]
 pub enum Builtin {
     Quote,
     Enclosure(Enclosure),
@@ -178,11 +181,13 @@ impl std::fmt::Display for Builtin {
     }
 }
 
+#[derive(PartialEq)]
 pub enum NumBinop {
     ArBinop(ArBinop),
     Lt,
 }
 
+#[derive(PartialEq)]
 pub enum ArBinop {
     Add,
     Sub,
@@ -190,16 +195,19 @@ pub enum ArBinop {
     Div,
 }
 
+#[derive(PartialEq)]
 pub enum ListMonop {
     Head,
     Tail,
 }
 
+#[derive(PartialEq)]
 pub enum Enclosure {
     Lambda,
     Macro,
 }
 
+#[derive(PartialEq)]
 pub struct Closure {
     pub params: Rc<List>,
     pub body: Rc<Expression>,
