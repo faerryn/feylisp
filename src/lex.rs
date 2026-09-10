@@ -120,7 +120,6 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                 }
                 ';' => {
                     result.push(Lexeme::Number(sign * mag));
-                    result.push(Lexeme::Quote);
                     state = State::Comment;
                 }
                 _ => state = State::Symbol,
@@ -146,9 +145,8 @@ pub fn lex(src: &str) -> Vec<Lexeme> {
                     state = State::Start;
                 }
                 ';' => {
-                    result.push(Lexeme::Number(sign * mag));
                     result.push(Lexeme::Symbol(src[start_index..curr_index].to_string()));
-                    result.push(Lexeme::Quote);
+                    state = State::Comment;
                 }
                 _ => state = State::Symbol,
             },
