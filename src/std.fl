@@ -1,4 +1,5 @@
 ;;; std.fl -*- mode: lisp; -*-
+;;; vi: set ft=lisp:
 
 (define list (lambda (...) ...))
 
